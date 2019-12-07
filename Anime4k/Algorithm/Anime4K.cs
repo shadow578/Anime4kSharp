@@ -7,16 +7,49 @@ using System.Threading.Tasks;
 namespace Anime4k.Algorithm
 {
     /// <summary>
-    /// Contains image functions needed for the Anime4K algorithm
+    /// Contains the Anime4K algorithm
     /// </summary>
-    public static class BaseFunctions
+    public static class Anime4K
     {
+        /// <summary>
+        /// Apply the anime4K algorithm to the image
+        /// </summary>
+        /// <remarks>this does NOT scale the image up</remarks>
+        /// <param name="img">the image to apply the algorithm to</param>
+        /// <param name="strenght">how strong the algorithm should be (range 0.0 to 1.0, tho capped max is 257.0)</param>
+        /// <param name="laps">how many times the algorithm should be executed on the image (more = sharper)</param>
+        /// <returns>the processed image (same as img param)</returns>
+        public static async Task<Image<Rgba32>> PushAnime4K(this Image<Rgba32> img, float strenght = 0.33f, int laps = 2)
+        {
+            //clamp & calc strenght for algorithm
+            strenght *= 255f;
+            strenght = Utility.Clamp(strenght, 0, 65535);
+
+            //execute laps
+            for(int l = 0; l < laps; l++)
+            {
+                //get luminance into alpha channel
+                img.GetLuminance();
+
+                //push color (INCLUDING alpha channel)
+                await img.PushColor(strenght);
+
+                //get gradient into alpha channel
+                await img.GetGradient();
+
+                //push gradient
+                await img.PushGradient(strenght);
+            }
+
+            return img;
+        }
+
         /// <summary>
         /// Compute the Luminance of every Pixel in the image and store it in the image's alpha channel
         /// </summary>
         /// <param name="img">the image to modify, in RGBA32 format</param>
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
-        public static Image<Rgba32> GetLuminance(this Image<Rgba32> img)
+        static Image<Rgba32> GetLuminance(this Image<Rgba32> img)
         {
             //process pixels directly
             img.DirectChangeEachPixel((x, y, p) =>
@@ -40,7 +73,7 @@ namespace Anime4k.Algorithm
         /// <param name="img">the image to modify</param>
         /// <param name="strenght">how strong the gradient is pushed (0.0-255.0)</param>
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
-        public static async Task<Image<Rgba32>> PushColor(this Image<Rgba32> img, float strenght)
+        static async Task<Image<Rgba32>> PushColor(this Image<Rgba32> img, float strenght)
         {
             Rgba32 KernelFunc(Rgba32 lightest, Rgba32 mc, params Rgba32[/*6*/] kernel)
             {
@@ -74,7 +107,7 @@ namespace Anime4k.Algorithm
                 return lightest;
             }
 
-            return await img.ChangeEachPixelAsync((x, y, mc) =>
+            Image<Rgba32> result = await img.ChangeEachPixelAsync((x, y, mc) =>
             {
                 // Kernel defination:
                 // [tl][tc][tr]
@@ -123,6 +156,9 @@ namespace Anime4k.Algorithm
                 //set pixel
                 return lightest;
             });
+
+            img = result;
+            return img;
         }
 
         /// <summary>
@@ -130,7 +166,7 @@ namespace Anime4k.Algorithm
         /// </summary>
         /// <param name="img">the image to modify</param>
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
-        public static async Task<Image<Rgba32>> GetGradient(this Image<Rgba32> img)
+        static async Task<Image<Rgba32>> GetGradient(this Image<Rgba32> img)
         {
             float SobelAlpha(float[/*3*/,/*3*/] mat, Rgba32[/*3*/,/*3*/] col)
             {
@@ -149,7 +185,7 @@ namespace Anime4k.Algorithm
                                 { 1,  2,  1 }};
 
             //change each pixel
-            return await img.ChangeEachPixelAsync((x, y, p) =>
+            Image<Rgba32> result = await img.ChangeEachPixelAsync((x, y, p) =>
             {
                 //skip first & last row & collumn
                 if (x == 0 || y == 0 || x == img.Width - 1 || y == img.Height - 1)
@@ -179,6 +215,9 @@ namespace Anime4k.Algorithm
                     return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(255 - derivata));
                 }
             });
+
+            img = result;
+            return img;
         }
 
         /// <summary>
@@ -187,7 +226,7 @@ namespace Anime4k.Algorithm
         /// <param name="img">the image to modify</param>
         /// <param name="strenght">how strong the gradient is pushed (0.0-255.0)</param>
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
-        public static async Task<Image<Rgba32>> PushGradient(this Image<Rgba32> img, float strenght)
+        static async Task<Image<Rgba32>> PushGradient(this Image<Rgba32> img, float strenght)
         {
             Rgba32 KernelFunc(Rgba32 lightest, Rgba32 mc, params Rgba32[/*6*/] kernel)
             {
@@ -221,7 +260,7 @@ namespace Anime4k.Algorithm
                 return lightest;
             }
 
-            return await img.ChangeEachPixelAsync((x, y, mc) =>
+            Image<Rgba32> result = await img.ChangeEachPixelAsync((x, y, mc) =>
             {
                 // Kernel defination:
                 // [tl][tc][tr]
@@ -271,6 +310,9 @@ namespace Anime4k.Algorithm
                 lightest.A = 255;
                 return lightest;
             });
+
+            img = result;
+            return img;
         }
     }
 }
