@@ -81,9 +81,9 @@ namespace Anime4k.Util
         /// <returns>the modified image (equal to img param)</returns>
         public static Image<T> DirectChangeEachPixel<T>(this Image<T> img, PixelFunc<T> pixelFunction) where T : struct, IPixel<T>
         {
-            for (int px = 0; px < img.Width; px++)
+            for (int px = 0; px < img.Width - 1; px++)
             {
-                for (int py = 0; py < img.Height; py++)
+                for (int py = 0; py < img.Height - 1; py++)
                 {
                     img[px, py] = pixelFunction(px, py, img[px, py]);
                 }
@@ -105,9 +105,9 @@ namespace Anime4k.Util
             Image<T> output = new Image<T>(img.Width, img.Height);
 
             //enumerate all pixels
-            for (int px = 0; px < img.Width; px++)
+            for (int px = 0; px < img.Width - 1; px++)
             {
-                for (int py = 0; py < img.Height; py++)
+                for (int py = 0; py < img.Height - 1; py++)
                 {
                     output[px, py] = pixelFunction(px, py, img[px, py]);
                 }
@@ -130,16 +130,13 @@ namespace Anime4k.Util
 
             //enumerate all pixels
             List<Task> pixelFunctionTasks = new List<Task>();
-            for (int px = 0; px < img.Width; px++)
+            for (int px = 0; px < img.Width - 1; px++)
             {
-                for (int py = 0; py < img.Height; py++)
+                for (int py = 0; py < img.Height - 1; py++)
                 {
-                    pixelFunctionTasks.Add(pixelFunction(px, py, img[px, py]).ContinueWith((r) =>
+                    pixelFunctionTasks.Add(Task.Run(() =>
                     {
-                        if (!r.IsFaulted)
-                        {
-                            output[px, py] = r.Result;
-                        }
+                        output[px, py] = pixelFunction(px, py, img[px, py]);
                     }));
                 }
             }

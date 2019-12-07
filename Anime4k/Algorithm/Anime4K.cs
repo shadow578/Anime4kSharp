@@ -30,15 +30,19 @@ namespace Anime4k.Algorithm
             {
                 //get luminance into alpha channel
                 img.GetLuminance();
+                img.Save($@"./i/db/{l}-0_get-lum.png");
 
                 //push color (INCLUDING alpha channel)
                 await img.PushColor(strength);
+                img.Save($@"./i/db/{l}-1_push-col.png");
 
                 //get gradient into alpha channel
                 await img.GetGradient();
+                img.Save($@"./i/db/{l}-2_get-grad.png");
 
                 //push gradient
                 await img.PushGradient(strength);
+                img.Save($@"./i/db/{l}-3_push-grad.png");
             }
 
             return img;
