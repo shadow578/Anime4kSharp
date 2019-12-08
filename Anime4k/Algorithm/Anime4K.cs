@@ -33,7 +33,7 @@ namespace Anime4k.Algorithm
                 img.Save($@"./i/db/{l}-0_get-lum.png");
 
                 //push color (INCLUDING alpha channel)
-                img = await PushColor(img, strength);//bad
+                img = await PushColor(img, strength);//works ok
                 img.Save($@"./i/db/{l}-1_push-col.png");
 
                 //get gradient into alpha channel
@@ -274,36 +274,13 @@ namespace Anime4k.Algorithm
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
         static async Task<Image<Rgba32>> PushGradient(Image<Rgba32> img, float strength)
         {
-            Rgba32 KernelFunc(Rgba32 lightest, Rgba32 mc, params Rgba32[/*6*/] kernel)
+            Rgba32 GetAverage(Rgba32 cc, Rgba32 a, Rgba32 b, Rgba32 c)
             {
-                if (kernel.Length != 6) throw new InvalidOperationException("kernel size expected 6!");
-
-                Rgba32 GetAverage(Rgba32 a, Rgba32 b, Rgba32 c)
-                {
-                    float aR = (mc.R * (255f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength)) / 255f;
-                    float aG = (mc.G * (255f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength)) / 255f;
-                    float aB = (mc.B * (255f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength)) / 255f;
-                    float aA = (mc.A * (255f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength)) / 255f;
-                    return new Rgba32(aR, aG, aB, aA);
-                }
-
-                float maxD = Utility.Max3(kernel[0].A, kernel[1].A, kernel[2].A);
-                float minL = Utility.Min3(kernel[3].A, kernel[4].A, kernel[5].A);
-
-                if (minL > mc.A && minL > maxD)
-                {
-                    return GetAverage(kernel[3], kernel[4], kernel[5]);
-                }
-
-                maxD = Utility.Max3(kernel[3].A, kernel[4].A, kernel[5].A);
-                minL = Utility.Min3(kernel[0].A, kernel[1].A, kernel[2].A);
-
-                if (minL > mc.A && minL > maxD)
-                {
-                    return GetAverage(kernel[0], kernel[1], kernel[2]);
-                }
-
-                return lightest;
+                float aR = (cc.R * (255f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength)) / 255f;
+                float aG = (cc.G * (255f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength)) / 255f;
+                float aB = (cc.B * (255f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength)) / 255f;
+                float aA = (cc.A * (255f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength)) / 255f;
+                return new Rgba32(aR / 255f, aG / 255f, aB / 255f, aA / 255f);
             }
 
             //return await img.ChangeEachPixelAsync((x, y, mc) =>
@@ -339,19 +316,89 @@ namespace Anime4k.Algorithm
 
                 //default lightest color to current pixel
                 Rgba32 lightest = mc;
+                float maxD;
+                float minL;
                 #endregion
 
-                //Kernel 0+4
-                lightest = KernelFunc(lightest, mc, br, bc, bl, tl, tc, tr);
+                #region Kernel 0+4
+                maxD = Utility.Max3(br.A, bc.A, bl.A);
+                minL = Utility.Min3(tl.A, tc.A, tr.A);
 
-                //Kernel 1+5
-                lightest = KernelFunc(lightest, mc, mc, ml, bc, mr, tc, tr);
+                if (minL > mc.A && minL > maxD)
+                {
+                    lightest = GetAverage(mc, tl, tc, tr);
+                }
+                else
+                {
+                    maxD = Utility.Max3(tl.A, tc.A, br.A);
+                    minL = Utility.Min3(br.A, bc.A, bl.A);
 
-                //Kernel 2+6
-                lightest = KernelFunc(lightest, mc, ml, tl, bl, mr, br, tr);
+                    if (minL > mc.A && minL > maxD)
+                    {
+                        lightest = GetAverage(mc, br, bc, bl);
+                    }
+                }
+                #endregion
 
-                //Kernel 3+7
-                lightest = KernelFunc(lightest, mc, mc, ml, tc, mr, br, bc);
+                #region Kernel 1+5
+                maxD = Utility.Max3(mc.A, ml.A, bc.A);
+                minL = Utility.Min3(mr.A, tc.A, tr.A);
+
+                if (minL > maxD)
+                {
+                    lightest = GetAverage(mc, mr, tc, tr);
+                }
+                else
+                {
+                    maxD = Utility.Max3(mc.A, mr.A, tc.A);
+                    minL = Utility.Min3(bl.A, ml.A, bc.A);
+
+                    if (minL > maxD)
+                    {
+                        lightest = GetAverage(mc, bl, ml, bc);
+                    }
+                }
+                #endregion
+
+                #region Kernel 2+6
+                maxD = Utility.Max3(ml.A, tl.A, bl.A);
+                minL = Utility.Min3(mr.A, br.A, tr.A);
+
+                if (minL > mc.A && minL > maxD)
+                {
+                    lightest = GetAverage(mc, mr, br, tr);
+                }
+                else
+                {
+                    maxD = Utility.Max3(mr.A, br.A, tr.A);
+                    minL = Utility.Min3(ml.A, tl.A, bl.A);
+
+                    if (minL > mc.A && minL > maxD)
+                    {
+                        lightest = GetAverage(mc, ml, tl, bl);
+                    }
+                }
+                #endregion
+
+                #region Kernel 3+7
+                maxD = Utility.Max3(mc.A, ml.A, tc.A);
+                minL = Utility.Min3(mr.A, br.A, bc.A);
+
+                if (minL > maxD)
+                {
+                    lightest = GetAverage(mc, mr, br, bc);
+                }
+                else
+                {
+                    maxD = Utility.Max3(mc.A, mr.A, bc.A);
+                    minL = Utility.Min3(tc.A, ml.A, tl.A);
+
+                    if (minL > maxD)
+                    {
+                        lightest = GetAverage(mc, tc, ml, tl);
+                    }
+                }
+                #endregion
 
                 //reset alpha channel since it is no longer needed
                 return new Rgba32(lightest.R, lightest.G, lightest.B, 255);
