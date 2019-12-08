@@ -61,6 +61,32 @@ namespace Anime4k.Util
         }
         #endregion
 
+        #region Pixels
+
+        /// <summary>
+        /// Calculate the luminance of a pixel (same as .NET Color.GetBrighness())
+        /// </summary>
+        /// <param name="p">the color to get the brightness of</param>
+        /// <returns>the brightness, range 0.0 - 1.0</returns>
+        public static float GetLuminance(this Rgba32 p)
+        {
+            float r = p.R / 255.0f;
+            float g = p.G / 255.0f;
+            float b = p.B / 255.0f;
+
+            float max = r;
+            float min = r;
+            if (g > max) max = g;
+            if (b > max) max = b;
+
+            if (g < min) min = g;
+            if (b < min) min = b;
+
+            return (max + min) / 2;
+        }
+
+        #endregion
+
         #region Image Manipulation
         /// <summary>
         /// a function executed on a pixel
