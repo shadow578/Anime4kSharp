@@ -3,6 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Threading.Tasks;
+using System.Numerics;
 
 namespace Anime4k.Algorithm
 {
@@ -26,6 +27,7 @@ namespace Anime4k.Algorithm
             strength = Utility.Clamp(strength, 0, 65535);
 
             //execute laps
+            Image<Rgba32> res = null;
             for (int l = 0; l < laps; l++)
             {
                 //get luminance into alpha channel
@@ -33,15 +35,21 @@ namespace Anime4k.Algorithm
                 img.Save($@"./i/db/{l}-0_get-lum.png");
 
                 //push color (INCLUDING alpha channel)
-                img = PushColor(img, strength);
+                res = PushColor(img, strength);
+                img.Dispose();
+                img = res;
                 img.Save($@"./i/db/{l}-1_push-col.png");
 
                 //get gradient into alpha channel
-                img = GetGradient(img);
+                res = GetGradient(img);
+                img.Dispose();
+                img = res;
                 img.Save($@"./i/db/{l}-2_get-grad.png");
 
                 //push gradient
-                img = PushGradient(img, strength);
+                res = PushGradient(img, strength);
+                img.Dispose();
+                img = res;
                 img.Save($@"./i/db/{l}-3_push-grad.png");
             }
 
@@ -208,27 +216,32 @@ namespace Anime4k.Algorithm
         }
 
         /// <summary>
+        /// Sobel Matrix for sobel operation in GetGradient
+        /// </summary>
+        static readonly float[,] gradientSobelX = { {-1, 0, 1 },
+                                                    {-2, 0, 2 },
+                                                    {-1, 0, 1 }};
+
+        /// <summary>
+        /// Sobel Matrix for sobel operation in GetGradient
+        /// </summary>
+        static readonly float[,] gradientSobelY = { {-1, -2, -1 },
+                                                    { 0,  0,  0 },
+                                                    { 1,  2,  1 }};
+
+        /// <summary>
         /// Compute the Gradient from the alpha channel of the image and store the result in the alpha channel
         /// </summary>
         /// <param name="img">the image to modify</param>
         /// <returns>the modified image, with luminance = alpha channel (same as img param)</returns>
         static Image<Rgba32> GetGradient(Image<Rgba32> img)
         {
-            float SobelAlpha(float[/*3*/,/*3*/] mat, Rgba32[/*3*/,/*3*/] col)
+            float SobelAlpha(float[/*3*/,/*3*/] mat, float[/*3*/,/*3*/] col)
             {
-                return col[0, 0].A * mat[0, 0] + col[0, 1].A * mat[0, 1] + col[0, 2].A * mat[0, 2]
-                     + col[1, 0].A * mat[1, 0] + col[1, 1].A * mat[1, 1] + col[1, 2].A * mat[1, 2]
-                     + col[2, 0].A * mat[2, 0] + col[2, 1].A * mat[2, 1] + col[2, 2].A * mat[2, 2];
+                return col[0, 0] * mat[0, 0] + col[0, 1] * mat[0, 1] + col[0, 2] * mat[0, 2]
+                     + col[1, 0] * mat[1, 0] + col[1, 1] * mat[1, 1] + col[1, 2] * mat[1, 2]
+                     + col[2, 0] * mat[2, 0] + col[2, 1] * mat[2, 1] + col[2, 2] * mat[2, 2];
             }
-
-            //init sobel matrixes
-            float[,] sobelX = { {-1, 0, 1 },
-                                {-2, 0, 2 },
-                                {-1, 0, 1 }};
-
-            float[,] sobelY = { {-1, -2, -1 },
-                                { 0,  0,  0 },
-                                { 1,  2,  1 }};
 
             //change each pixel
             return img.ChangeEachPixelParallel((x, y, p) =>
@@ -240,25 +253,25 @@ namespace Anime4k.Algorithm
                 }
 
                 //get pixels for sobel calculation
-                Rgba32[,] sobCol = {{img[x-1, y-1], img[x, y-1], img[x+1, y-1] },
-                                    {img[x-1, y],   p,           img[x+1, y] },
-                                    {img[x-1, y+1], img[x, y+1], img[x+1, y+1] }};
+                float[,] sobAlpha = {{img[x-1, y-1].A, img[x, y-1].A, img[x+1, y-1].A },
+                                     {img[x-1, y].A,   p.A,           img[x+1, y].A },
+                                     {img[x-1, y+1].A, img[x, y+1].A, img[x+1, y+1].A }};
 
                 //do sobel operations on alpha channels
-                float dX = SobelAlpha(sobelX, sobCol);
-                float dY = SobelAlpha(sobelY, sobCol);
+                float dX = SobelAlpha(gradientSobelX, sobAlpha);
+                float dY = SobelAlpha(gradientSobelY, sobAlpha);
 
-                //calculate derivata
-                double derivata = Math.Sqrt((dX * dX) + (dY * dY));
+                //calculate derivata. Dont take square root to save processing time
+                double derivataSq = (dX * dX) + (dY * dY);
 
                 //set pixel based on derivata
-                if (derivata > 255)
+                if (derivataSq > (255 * 255))
                 {
                     return new Rgba32(p.R, p.G, p.B, 0);
                 }
                 else
                 {
-                    return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(255 - derivata));
+                    return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(255 - Math.Sqrt(derivataSq)));
                 }
             });
         }
