@@ -145,30 +145,24 @@ namespace Anime4k.Util
         /// <summary>
         /// Execute a function for every pixel in the image and apply changes to the pixel to a copy of the image.
         /// </summary>
+        /// <remarks>uses Parallel.For to use multi- core- processors better</remarks>
         /// <typeparam name="T">the pixel format of the image</typeparam>
         /// <param name="img">the image to use</param>
         /// <param name="pixelFunction">the function to execute for every pixel</param>
         /// <returns>the modified image</returns>
-        public static async Task<Image<T>> ChangeEachPixelAsync<T>(this Image<T> img, PixelFunc<T> pixelFunction) where T : struct, IPixel<T>
+        public static Image<T> ChangeEachPixelParallel<T>(this Image<T> img, PixelFunc<T> pixelFunction) where T : struct, IPixel<T>
         {
             //create output image
             Image<T> output = new Image<T>(img.Width, img.Height);
 
             //enumerate all pixels
-            List<Task> pixelFunctionTasks = new List<Task>();
-            for (int px = 0; px < img.Width - 1; px++)
+            Parallel.For(0, img.Width - 1, (px) =>
             {
                 for (int py = 0; py < img.Height - 1; py++)
                 {
-                    pixelFunctionTasks.Add(Task.Run(() =>
-                    {
-                        output[px, py] = pixelFunction(px, py, img[px, py]);
-                    }));
+                    output[px, py] = pixelFunction(px, py, img[px, py]);
                 }
-            }
-
-            //wait for all tasks to finish.
-            await Task.WhenAll(pixelFunctionTasks);
+            });
             return output;
         }
         #endregion

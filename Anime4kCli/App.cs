@@ -23,7 +23,7 @@ namespace Anime4kCli
             Image<Rgba32> img = Image.Load<Rgba32>(@"./i/test.png");
 
             sw.Start();
-            img = img.PushAnime4K().GetAwaiter().GetResult();
+            img = img.PushAnime4K();
             sw.Stop();
 
             img.Save(@"./i/out.png");
