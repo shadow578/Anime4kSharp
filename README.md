@@ -56,7 +56,8 @@ After doing this, we get a Image that looks nearly the same. But looking at the 
 
 [IMG:0-2_PUSH_COLOR]
 
-The folloing Image highlights the differences between the upscaled version of the image and the image after the push color step
+The following Image highlights the differences between the upscaled version of the image and the image after the push color step. <br/>
+As you can see, the changes are mostly concentrated at edges between colors and lines.
 
 [IMG:0-2_PUSH_COLOR_DIFF]
 
@@ -83,7 +84,7 @@ To better show the differences, heres a zoomed- in comparison between bicubic in
 I wrote this port of Anime4K to get a deeper understanding of the Algorithm. <br/>
 My personal end goal was to understand Anime4K and the mechanics behind it enough to port it from the reference implementation (which is written in "mpv- syntax" GLSL) to GLSL ES Fragment Shaders.
 
-## Other Implementations And Projects That Use Anime4K
+## Other Projects That Use Anime4K
 * [bloc97/Anime4K](https://github.com/bloc97/Anime4K)
 * [yeataro/TD-Anime4K](https://github.com/yeataro/TD-Anime4K)
 * [keijiro/UnityAnime4K](https://github.com/keijiro/UnityAnime4K)
