@@ -2,6 +2,8 @@
 Anime4KSharp is a .Net Core library that implements [bloc97's Anime4K](https://github.com/bloc97/Anime4K) Algorithm version [0.9](https://github.com/bloc97/Anime4K/blob/master/glsl/Anime4K_Adaptive_v0.9.glsl).<br/>
 The Algorithm is executed on the CPU, tho utilizing all CPU Cores that are available.
 
+<img src="/ASSETS/image_compare_TOP.png?raw=true" width="1000">
+
 Images are processed in four phases that are executed on a pixel- per- pixel basis. Each phase takes a input image and renders it to a output image. <br/>
 This makes it easy to port the algorithm (back) to GLSL fragment shaders.
 
@@ -38,47 +40,39 @@ I, however, will only give a brief overview of the algorithm. If you want to rea
 
 The Algorithm itself can be summed up in five steps, one of which beign the initial upscaling of the image.
 
-Let's assume we start with the following image:
+Let's assume we start with the following image: <br/>
+<img src="/ASSETS/step-by-step/sbs-0-input-image.png?raw=true" width="300">
 
-[IMG:INPUT_IMAGE]
-
-We first scale the Image up using a arbitrary Image interpolation algorithm (Anime4K suggests bicubic interpolation, which is also what I went with) 
-
-[IMG:0-0_SCALED_UP]
+We first scale the Image up using a arbitrary Image interpolation algorithm (bloc97 suggests bicubic interpolation, which is also what I went with)  <br/>
+<img src="/ASSETS/step-by-step/sbs-1-image-scaled.png?raw=true" width="300">
 
 We then calculate the luminance of every pixel and store it in the otherwise unused alpha channel 
-(Image shows B/W representation of alpha channel)
-
-[IMG:0-1_GET_LUM_BW]
+(Image shows B/W representation of alpha channel) <br/>
+<img src="/ASSETS/step-by-step/sbs-2-get-luminance.png?raw=true" width="300">
 
 In the third step, the color is pushed based on the luminance information in the alpha channel. <br/>
-After doing this, we get a Image that looks nearly the same. But looking at the edges of lines and different colors reveals that they are lighter than the ones in the original (this is especially noticeable at lines)
-
-[IMG:0-2_PUSH_COLOR]
+After doing this, we get a Image that looks nearly the same. But looking at the edges of lines and different colors reveals that they are lighter than in the original (this is especially noticeable at lines) <br/>
+<img src="/ASSETS/step-by-step/sbs-3-push-color.png?raw=true" width="300">
 
 The following Image highlights the differences between the upscaled version of the image and the image after the push color step. <br/>
-As you can see, the changes are mostly concentrated at edges between colors and lines.
-
-[IMG:0-2_PUSH_COLOR_DIFF]
+As you can see, the changes are mostly concentrated at edges between colors and lines. <br/>
+<img src="/ASSETS/step-by-step/sbs-3_2-push-color-diff.png?raw=true" width="300">
 
 The fourth step now detects the edges of the luminance map using a [Sobel operator](https://en.wikipedia.org/wiki/Sobel_operator). <br/>
 The result of the sobel operation is, again, stored in the alpha channel. <br/>
-However, the result of the sobel operation is first inverted before storing it. (Image shows B/W representation of alpha channel)
-
-[IMG:0-3_GET_GRADIENT_BW]
+However, the result of the sobel operation is first inverted before storing it. <br/>
+(Image shows B/W representation of alpha channel) <br/>
+<img src="/ASSETS/step-by-step/sbs-4-get-gradient.png?raw=true" width="300">
 
 The fifth and last step is almost the same as step three, tho instead of getting the lightest color, we use the average color to remove some unwanted noise that is caused by the interpolation. <br/>
 Before saving the image, the alpha value of each pixel is reset to completely dump the alpha channel. If this is not done, the output Image will still contain the gradient map. This would result in an image where all edges are transparent.<br/>
-The output of this step is our final result (assuming we only do one pass)
+The output of this step is our final result (assuming we only do one pass) <br/>
+<img src="/ASSETS/step-by-step/sbs-5-push-gradient.png?raw=true" width="300">
 
-[IMG:0-4_PUSH_GRADIENT]
 
+To better show the differences, heres a zoomed- in comparison between bicubic interpolation and two passes of Anime4K: <br/>
+<img src="/ASSETS/sbs-final-compare.png?raw=true" width="1000">
 
-To better show the differences, heres a zoomed- in comparison between bicubic interpolation and two passes of Anime4K:
-
-[IMG:COMPARE_BICUBIC] [IMG:COMPARE_ANIME4K] [IMG:COMPARE_BICUBIC_ANIME4K_DIFF]
-
-*TODO: Add Images :P
 
 ## But Why?
 I wrote this port of Anime4K to get a deeper understanding of the Algorithm. <br/>
