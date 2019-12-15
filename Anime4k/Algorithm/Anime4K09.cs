@@ -2,15 +2,13 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using System;
-using System.Threading.Tasks;
-using System.Numerics;
 
 namespace Anime4k.Algorithm
 {
     /// <summary>
-    /// Contains the Anime4K algorithm
+    /// Contains the Anime4K algorithm, Version 0.9
     /// </summary>
-    public static class Anime4K
+    public static class Anime4K09
     {
         /// <summary>
         /// Apply the anime4K algorithm to the image
@@ -18,9 +16,9 @@ namespace Anime4k.Algorithm
         /// <remarks>this does NOT scale the image up</remarks>
         /// <param name="img">the image to apply the algorithm to</param>
         /// <param name="strength">how strong the algorithm should be (range 0.0 to 1.0, tho capped max is 257.0)</param>
-        /// <param name="laps">how many times the algorithm should be executed on the image (more = sharper)</param>
+        /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
         /// <returns>the processed image (same as img param)</returns>
-        public static Image<Rgba32> PushAnime4K(this Image<Rgba32> img, float strength = 0.33f, int laps = 1)
+        public static Image<Rgba32> PushAnime4K(Image<Rgba32> img, float strength = 0.33f, int passes = 2)
         {
             //clamp & calc strenght for algorithm
             strength *= 255f;
@@ -28,29 +26,29 @@ namespace Anime4k.Algorithm
 
             //execute laps
             Image<Rgba32> res = null;
-            for (int l = 0; l < laps; l++)
+            for (int p = 0; p < passes; p++)
             {
                 //get luminance into alpha channel
                 img = GetLuminance(img);
-                img.Save($@"./i/db/{l}-0_get-lum.png");
+                img.Save($@"./i/db/{p}-0_get-lum.png");
 
                 //push color (INCLUDING alpha channel)
                 res = PushColor(img, strength);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{l}-1_push-col.png");
+                img.Save($@"./i/db/{p}-1_push-col.png");
 
                 //get gradient into alpha channel
                 res = GetGradient(img);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{l}-2_get-grad.png");
+                img.Save($@"./i/db/{p}-2_get-grad.png");
 
                 //push gradient
                 res = PushGradient(img, strength);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{l}-3_push-grad.png");
+                img.Save($@"./i/db/{p}-3_push-grad.png");
             }
 
             return img;
@@ -64,7 +62,7 @@ namespace Anime4k.Algorithm
         static Image<Rgba32> GetLuminance(Image<Rgba32> img)
         {
             //process pixels directly
-            return img.DirectChangeEachPixel((x, y, p) =>
+            return img.ChangeEachPixelParallel((x, y, p) =>
             {
                 //calc luminance for pixel in range 0 - 255
                 float pxLuminance = p.GetLuminance() * 255f;
