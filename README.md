@@ -1,7 +1,7 @@
 # Anime4kSharp
-Anime4KSharp is a .Net Core library that implements [bloc97's Anime4K](https://github.com/bloc97/Anime4K) Algorithm version [0.9](https://github.com/bloc97/Anime4K/blob/master/glsl/Anime4K_Adaptive_v0.9.glsl).<br/>
-The Algorithm is executed on the CPU, tho utilizing all CPU Cores that are available.
-
+Anime4KSharp is a .Net Core library that implements [bloc97's Anime4K](https://github.com/bloc97/Anime4K) Algorithm version [0.9](https://github.com/bloc97/Anime4K/blob/master/glsl/Anime4K_Adaptive_v0.9.glsl). <br/>
+The Algorithm is executed on the CPU, but utilizing all CPU Cores that are available. <br/>
+This yields to a conversion time of "only" 4432 ms when upscaling from 1080p to 2160p. This time could possibly reduced with further optimization. </br>
 <img src="/ASSETS/image_compare_TOP.png?raw=true" width="1000">
 
 Images are processed in four phases that are executed on a pixel- per- pixel basis. Each phase takes a input image and renders it to a output image. <br/>
