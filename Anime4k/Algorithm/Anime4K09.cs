@@ -3,6 +3,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System;
+using System.IO;
 
 namespace Anime4k.Algorithm
 {
@@ -21,15 +22,16 @@ namespace Anime4k.Algorithm
         /// <param name="img">the source image to scale</param>
         /// <param name="scaleFactor">how much the image should be scaled up (0.5 = half size, 2 = double size)</param>
         /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
+        /// <param name="debugSavePhases">if true, each phase of the pushing algorithm is saved to ./debug/</param>
         /// <returns>the upscaled image</returns>
-        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, float scaleFactor, int passes = 2)
+        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, float scaleFactor, int passes = 2, bool debugSavePhases = false)
         {
             //calculate push strenght (range 0-1)
             float strengthColor = Utility.Clamp(scaleFactor / 6f, 0f, 1f);
             float strengthGradient = Utility.Clamp(scaleFactor / 2f, 0f, 1f);
 
             //apply anime4k
-            return ScaleAnime4K(img, scaleFactor, passes, strengthColor, strengthGradient);
+            return ScaleAnime4K(img, scaleFactor, passes, strengthColor, strengthGradient, debugSavePhases);
         }
 
         /// <summary>
@@ -41,8 +43,9 @@ namespace Anime4k.Algorithm
         /// <param name="newWidth">the width of the scaled image</param>
         /// <param name="newHeight">the height of the scaled image</param>
         /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
+        /// <param name="debugSavePhases">if true, each phase of the pushing algorithm is saved to ./debug/</param>
         /// <returns>the upscaled image</returns>
-        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, int newWidth, int newHeight, int passes = 2)
+        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, int newWidth, int newHeight, int passes = 2, bool debugSavePhases = false)
         {
             //calculate scale
             float scaleW = newWidth / img.Width;
@@ -54,7 +57,7 @@ namespace Anime4k.Algorithm
             float strengthGradient = Utility.Clamp(scale / 2f, 0f, 1f);
 
             //apply anime4k
-            return ScaleAnime4K(img, newWidth, newHeight, passes, strengthColor, strengthGradient);
+            return ScaleAnime4K(img, newWidth, newHeight, passes, strengthColor, strengthGradient, debugSavePhases);
         }
 
         /// <summary>
@@ -66,12 +69,13 @@ namespace Anime4k.Algorithm
         /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
         /// <param name="strengthColor">how strong color push operations should be (scale / 6, range from 0-1)</param>
         /// <param name="strengthGradient">how strong gradient push operations should be (scale / 2, range from 0-1)</param>
+        /// <param name="debugSavePhases">if true, each phase of the pushing algorithm is saved to ./debug/</param>
         /// <returns>the upscaled image</returns>
-        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, float scaleFactor, int passes, float strengthColor, float strengthGradient)
+        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, float scaleFactor, int passes, float strengthColor, float strengthGradient, bool debugSavePhases = false)
         {
             int w = (int)Math.Floor(img.Width * scaleFactor);
             int h = (int)Math.Floor(img.Height * scaleFactor);
-            return ScaleAnime4K(img, w, h, passes, strengthColor, strengthGradient);
+            return ScaleAnime4K(img, w, h, passes, strengthColor, strengthGradient, debugSavePhases);
         }
 
         /// <summary>
@@ -84,8 +88,9 @@ namespace Anime4k.Algorithm
         /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
         /// <param name="strengthColor">how strong color push operations should be (scale / 6, range from 0-1)</param>
         /// <param name="strengthGradient">how strong gradient push operations should be (scale / 2, range from 0-1)</param>
+        /// <param name="debugSavePhases">if true, each phase of the pushing algorithm is saved to ./debug/</param>
         /// <returns>the upscaled image</returns>
-        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, int newWidth, int newHeight, int passes, float strengthColor, float strengthGradient)
+        public static Image<Rgba32> ScaleAnime4K(Image<Rgba32> img, int newWidth, int newHeight, int passes, float strengthColor, float strengthGradient, bool debugSavePhases = false)
         {
             //check new dimensions are valid
             if (newWidth <= 0 || newHeight <= 0)
@@ -105,11 +110,20 @@ namespace Anime4k.Algorithm
                 throw new InvalidOperationException("Anime4K Push Strenght has to be larger than or equal 0!");
             }
 
+            //create ./debug/ if needed
+            if (debugSavePhases && !Directory.Exists("./debug/"))
+            {
+                Directory.CreateDirectory("./debug/");
+            }
+
             //Upscale image
             Image<Rgba32> imgScaled = img.Clone((i) => i.Resize(newWidth, newHeight, KnownResamplers.Bicubic));
 
+            //save upscaled image to ./debug/
+            if (debugSavePhases) imgScaled.Save($@"./debug/0-0_scale-up.png");
+
             //apply anime4k
-            return PushAnime4K(imgScaled, passes, strengthColor, strengthGradient);
+            return PushAnime4K(imgScaled, passes, strengthColor, strengthGradient, debugSavePhases);
         }
 
         #endregion
@@ -124,8 +138,9 @@ namespace Anime4k.Algorithm
         /// <param name="passes">how many times the algorithm should be executed on the image (more = sharper)</param>
         /// <param name="strengthColor">how strong color push operations should be (scale / 6, range from 0-1)</param>
         /// <param name="strengthGradient">how strong gradient push operations should be (scale / 2, range from 0-1)</param>
+        /// <param name="debugSavePhases">if true, each phase of the pushing algorithm is saved to ./debug/</param>
         /// <returns>the processed image (same as img param)</returns>
-        public static Image<Rgba32> PushAnime4K(Image<Rgba32> img, int passes = 2, float strengthColor = 0.33f, float strengthGradient = 0.99f)
+        public static Image<Rgba32> PushAnime4K(Image<Rgba32> img, int passes = 2, float strengthColor = 0.33f, float strengthGradient = 0.99f, bool debugSavePhases = false)
         {
             //clamp & calc strenght for algorithm
             strengthColor *= 255f;
@@ -134,31 +149,37 @@ namespace Anime4k.Algorithm
             strengthGradient *= 255f;
             strengthGradient = Utility.Clamp(strengthGradient, 0, 65535);
 
+            //create ./debug/ if needed
+            if (debugSavePhases && !Directory.Exists("./debug/"))
+            {
+                Directory.CreateDirectory("./debug/");
+            }
+
             //execute laps
             Image<Rgba32> res = null;
             for (int p = 0; p < passes; p++)
             {
                 //get luminance into alpha channel
                 img = GetLuminance(img);
-                img.Save($@"./i/db/{p}-0_get-lum.png");
+                if (debugSavePhases) img.Save($@"./debug/{p}-1_get-lum.png");
 
                 //push color (INCLUDING alpha channel)
                 res = PushColor(img, strengthColor);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{p}-1_push-col.png");
+                if (debugSavePhases) img.Save($@"./debug/{p}-2_push-col.png");
 
                 //get gradient into alpha channel
                 res = GetGradient(img);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{p}-2_get-grad.png");
+                if (debugSavePhases) img.Save($@"./debug/{p}-3_get-grad.png");
 
                 //push gradient
                 res = PushGradient(img, strengthGradient);
                 img.Dispose();
                 img = res;
-                img.Save($@"./i/db/{p}-3_push-grad.png");
+                if (debugSavePhases) img.Save($@"./debug/{p}-4_push-grad.png");
             }
 
             return img;

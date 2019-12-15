@@ -10,6 +10,26 @@ namespace Anime4k.Util
     /// </summary>
     public static class Utility
     {
+        #region String Manipulation
+
+        /// <summary>
+        /// Does the string start with any of the given sub strings?
+        /// </summary>
+        /// <param name="str">the string to check</param>
+        /// <param name="startWiths">the list of sub strings</param>
+        /// <returns>deos the string start with any of the sub strings?</returns>
+        public static bool StartsWithAny(this string str, params char[] startWiths)
+        {
+            foreach (char c in startWiths)
+            {
+                if (str.StartsWith(c.ToString())) return true;
+            }
+
+            return false;
+        }
+
+        #endregion
+
         #region Math
         /// <summary>
         /// Clamp a float to be between the min and max value
