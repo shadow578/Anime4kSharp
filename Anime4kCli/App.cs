@@ -154,6 +154,12 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
             Console.WriteLine("Load Source Image...");
             Image<Rgba32> inputImg = Image.Load<Rgba32>(inputFile);
 
+            #region Create Scaler
+            //create scaler using version 0.9
+            Anime4KScaler anime4KScaler = new Anime4KScaler();
+
+            #endregion
+
             #region Run Anime4K
             //apply scaling according to mode flags
             Console.WriteLine("Run Anime4K based on mode flags...");
@@ -165,12 +171,12 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                 if (hasStrengthValues)
                 {
                     //target size + strength
-                    outputImg = Anime4K09.ScaleAnime4K(inputImg, targetSize.Width, targetSize.Height, a4kLaps, strengthColor, strengthGradient, debug);
+                    outputImg = anime4KScaler.Scale(inputImg, targetSize.Width, targetSize.Height, a4kLaps, strengthColor, strengthGradient, debug);
                 }
                 else
                 {
                     //target size no strength
-                    outputImg = Anime4K09.ScaleAnime4K(inputImg, targetSize.Width, targetSize.Height, a4kLaps, debug);
+                    outputImg = anime4KScaler.Scale(inputImg, targetSize.Width, targetSize.Height, a4kLaps, debug);
                 }
             }
             else
@@ -178,12 +184,12 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                 if (hasStrengthValues)
                 {
                     //scale factor + strength
-                    outputImg = Anime4K09.ScaleAnime4K(inputImg, scaleFactor, a4kLaps, strengthColor, strengthGradient, debug);
+                    outputImg = anime4KScaler.Scale(inputImg, scaleFactor, a4kLaps, strengthColor, strengthGradient, debug);
                 }
                 else
                 {
                     //scale factor no strength
-                    outputImg = Anime4K09.ScaleAnime4K(inputImg, scaleFactor, a4kLaps, debug);
+                    outputImg = anime4KScaler.Scale(inputImg, scaleFactor, a4kLaps, debug);
                 }
             }
             sw.Stop();
