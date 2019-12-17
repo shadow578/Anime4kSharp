@@ -22,6 +22,22 @@ namespace Anime4kCli
             CANNOT_FIND_INPUT_FILE
         }
 
+        /// <summary>
+        /// Anime4K version names selectable by using -version parameter
+        /// </summary>
+        enum Anime4KVersion
+        {
+            /// <summary>
+            /// Anime4K version 0.9
+            /// </summary>
+            v09,
+
+            /// <summary>
+            /// Anime4K version 1.0 RC2
+            /// </summary>
+            v10RC2
+        }
+
         public static int Main(string[] args)
         {
             //run a4k
@@ -56,8 +72,9 @@ namespace Anime4kCli
             Size targetSize = Size.Empty;
             float strengthColor = -1f;
             float strengthGradient = -1f;
-            int a4kLaps = 2;
+            int passes = 2;
             bool debug = false;
+            Anime4KVersion version = Anime4KVersion.v09;
 
             //parse the command line arguments
             Dictionary<string, string> cArgs = ParseArgs(args, new char[] { '-', '/' });
@@ -109,7 +126,7 @@ namespace Anime4kCli
 
             //get a4k laps count
             if (cArgs.TryGetValue("laps", "l", out string lapsStr)
-                && !int.TryParse(lapsStr, out a4kLaps))
+                && !int.TryParse(lapsStr, out passes))
             {
                 Console.WriteLine($"Failed to parse anime4k laps count value from input string \"{lapsStr}\"!");
             }
@@ -124,6 +141,13 @@ namespace Anime4kCli
                 {
                     Console.WriteLine($"Failed to parse debug flag from input string \"{dbStr}\"!");
                 }
+            }
+
+            //get version
+            if (cArgs.TryGetValue("version", "v", out string verStr)
+                && !Enum.TryParse(verStr, out version))
+            {
+                Console.WriteLine($"Failed to parse anime4k version from input string \"{verStr}\"!");
             }
 
             #endregion
@@ -144,7 +168,8 @@ Scale Factor:       {scaleFactor}
 Target Resolution:  {targetSize.Width} x {targetSize.Height}
 Use Resolution:     {(hasTargetSize ? "YES" : "NO")}
 --Anime4K-Config----------------------------------
-Anime4K Laps:           {a4kLaps}
+Anime4K Version:        {version}
+Anime4K Laps:           {passes}
 Color Push Strength:    {strengthColor}
 Gradient Push Strength: {strengthGradient}
 Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
@@ -155,8 +180,24 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
             Image<Rgba32> inputImg = Image.Load<Rgba32>(inputFile);
 
             #region Create Scaler
-            //create scaler using version 0.9
-            Anime4KScaler anime4KScaler = new Anime4KScaler();
+            //create scaler
+            Anime4KScaler scaler;
+            switch (version)
+            {
+                case Anime4KVersion.v10RC2:
+                {
+                    //Create anime4k scaler version 1.0 RC2
+                    throw new NotImplementedException("Anime4K 1.0 RC2 is not implemented!");
+                    //break;
+                }
+                case Anime4KVersion.v09:
+                default:
+                {
+                    //Create anime4k scaler version 0.9 (default)
+                    scaler = new Anime4KScaler(new Anime4K09());
+                    break;
+                }
+            }
 
             #endregion
 
@@ -171,12 +212,12 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                 if (hasStrengthValues)
                 {
                     //target size + strength
-                    outputImg = anime4KScaler.Scale(inputImg, targetSize.Width, targetSize.Height, a4kLaps, strengthColor, strengthGradient, debug);
+                    outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, strengthColor, strengthGradient, debug);
                 }
                 else
                 {
                     //target size no strength
-                    outputImg = anime4KScaler.Scale(inputImg, targetSize.Width, targetSize.Height, a4kLaps, debug);
+                    outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, debug);
                 }
             }
             else
@@ -184,12 +225,12 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                 if (hasStrengthValues)
                 {
                     //scale factor + strength
-                    outputImg = anime4KScaler.Scale(inputImg, scaleFactor, a4kLaps, strengthColor, strengthGradient, debug);
+                    outputImg = scaler.Scale(inputImg, scaleFactor, passes, strengthColor, strengthGradient, debug);
                 }
                 else
                 {
                     //scale factor no strength
-                    outputImg = anime4KScaler.Scale(inputImg, scaleFactor, a4kLaps, debug);
+                    outputImg = scaler.Scale(inputImg, scaleFactor, passes, debug);
                 }
             }
             sw.Stop();
@@ -211,6 +252,15 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
         /// <param name="cause">why the help page is printed</param>
         static void PrintHelp(string cause = "")
         {
+            //create a list of available versions
+            string verStr = "";
+            foreach (string ver in Enum.GetNames(typeof(Anime4KVersion)))
+            {
+                verStr += ver;
+                verStr += ", ";
+            }
+
+            //print page
             Console.WriteLine($@"
 Anime4K CLI Help Page
 Shown to you because of error code: {cause}.
@@ -231,10 +281,15 @@ Console Arguments:
                             (optional, default value: 2)
 -debug / -d       <bool>    when set the different phases are saved to disk     
                             (optional, default value: false)
+-version /-v      <ver>     Ânime4K version to use.
+                            (optional, default value: v09)
 
 Any Argument Value may be encapsulated in (double) quotes
 Flags (arguments of type bool) default to TRUE if no value is given
     so ""-d"" is the same as ""-d true""
+
+Available Anime4K versions are:
+    {verStr}
 
 Press <ENTER> to continue.");
             Console.ReadLine();
