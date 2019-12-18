@@ -125,10 +125,10 @@ namespace Anime4kCli
             }
 
             //get a4k laps count
-            if (cArgs.TryGetValue("laps", "l", out string lapsStr)
-                && !int.TryParse(lapsStr, out passes))
+            if (cArgs.TryGetValue("passes", "p", out string passStr)
+                && !int.TryParse(passStr, out passes))
             {
-                Console.WriteLine($"Failed to parse anime4k laps count value from input string \"{lapsStr}\"!");
+                Console.WriteLine($"Failed to parse anime4k pass count value from input string \"{passStr}\"!");
             }
 
             //get debug flag
@@ -276,8 +276,8 @@ Console Arguments:
                             (optional)
 -strenghtG / -sg  <float>   gradient algorithm strength                         
                             (optional)
--laps / -l        <int>     how often the algorithm is repeated                 
-                            (optional, default value: 2)
+-passes / -p      <int>     how often the algorithm is repeated                 
+                            (optional, default value: 1)
 -debug / -d       <bool>    when set the different phases are saved to disk     
                             (optional, default value: false)
 -version /-v      <ver>     Ânime4K version to use.
