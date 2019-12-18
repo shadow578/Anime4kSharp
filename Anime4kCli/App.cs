@@ -79,6 +79,12 @@ namespace Anime4kCli
             //parse the command line arguments
             Dictionary<string, string> cArgs = ParseArgs(args, new char[] { '-', '/' });
 
+            //check for help arg
+            if(cArgs.TryGetValue("help", "?", out string _))
+            {
+                PrintHelp("HELP_ARG_SUPPLIED");
+            }
+
             #region Parse Argument List
 
             //get input path
@@ -280,8 +286,9 @@ Console Arguments:
                             (optional, default value: 1)
 -debug / -d       <bool>    when set the different phases are saved to disk     
                             (optional, default value: false)
--version /-v      <ver>     Ânime4K version to use.
+-version /-v      <ver>     Anime4K version to use.
                             (optional, default value: v09)
+-help /-?                   Show this help page
 
 Any Argument Value may be encapsulated in (double) quotes
 Flags (arguments of type bool) default to TRUE if no value is given
