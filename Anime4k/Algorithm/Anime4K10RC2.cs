@@ -8,9 +8,8 @@ using System.Numerics;
 namespace Anime4k.Algorithm
 {
     /// <summary>
-    /// Contains the Anime4K algorithm in Version 1.0 RC s2
+    /// Contains the Anime4K algorithm in Version 1.0 RC 2
     /// </summary>
-    [Obsolete("In Developement, needs more testing!")]
     public class Anime4K010RC2 : IAnime4KImplementation
     {
         /// <summary>
@@ -36,6 +35,14 @@ namespace Anime4k.Algorithm
                 //compute luminance into DATA RED Channel
                 Image<Rgba32> data = GetLuminance(img);
 
+                //create gradient map based on luma (RED), save to ALPHA
+                //this function uses the GREEN and BLUE channel for temporary values,  
+                //so has to run before those channels are actually used for something
+                data = ComputeGradient(data);
+
+                //RED (luma), GREEN (TMP-xGrad), BLUE (TMP-yGrad), ALPHA (gradient map)
+                if (debugSavePhases) DBSaveImg(data, p, "1_compute-grad");
+
                 //run gauss filter on luma (RED), save to GREEN
                 data = ComputeLumaGaussian(data);
 
@@ -44,28 +51,25 @@ namespace Anime4k.Algorithm
                 data = DetectLines(data);
 
                 //RED (luma), GREEN (luma gauss), BLUE (line map)
-                if (debugSavePhases) DBSaveImg(data, p, "1_data_line-det-no-gauss");
+                if (debugSavePhases) DBSaveImg(data, p, "2_data_line-det-no-gauss");
 
                 //run gauss filter on line map (BLUE), save to BLUE (overwrite)
                 data = ComputeLineGaussian(data);
 
-                //create gradient map based on luma (RED), save to ALPHA
-                data = ComputeGradient(data);
-
                 //RED (luma), GREEN (luma gauss), BLUE (line map gauss), ALPHA (gradient map)
-                if (debugSavePhases) DBSaveImg(data, p, "2_data_line-gauss");
+                if (debugSavePhases) DBSaveImg(data, p, "3_data_line-det-gauss");
                 #endregion
 
                 #region Apply Anime4K to image
                 //refine thin lines based on luma (RED) and line map (BLUE),
                 //overwrite original image 
                 img = PushThinLines(img, data, strengthColor);
-                if (debugSavePhases) DBSaveImg(img, p, "3_img_push-thin-lines");
+                if (debugSavePhases) DBSaveImg(img, p, "4_img_push-thin-lines");
 
                 //refine gradients based on luma (RED), line map (BLUE) and gradient map (ALPHA), 
                 //overwrite original image 
                 img = PushLines(img, data, strengthGradient);
-                if (debugSavePhases) DBSaveImg(img, p, "4_img_push-lines");
+                if (debugSavePhases) DBSaveImg(img, p, "5_img_push-lines");
 
                 //run 1 iteration of fast fxaa
                 //TODO: fix fxaa
@@ -75,7 +79,7 @@ namespace Anime4k.Algorithm
 
                 //remove information in alpha channel (only for c#)
                 img = ResetAlpha(img);
-                if (debugSavePhases) DBSaveImg(img, p, "6_img_reset-alpha");
+                if (debugSavePhases) DBSaveImg(img, p, "7_img_final-reset-alpha");
             }
 
             return img;
@@ -132,6 +136,9 @@ namespace Anime4k.Algorithm
         /// <returns>the value as byte</returns>
         byte UnFloat(float c)
         {
+            //push to middle
+            c += 0.5f;
+
             //clamp to 0 - 255
             c = Utility.Clamp(c, 0f, 255f);
 
@@ -152,7 +159,7 @@ namespace Anime4k.Algorithm
                 //calc luminance for pixel in range 0 - 255
                 float pxLuminance = p.GetLuminance() * 255f;
 
-                //clamp luminance to 0 - 255
+                //sanity check: clamp luminance to 0 - 255
                 pxLuminance = Utility.Clamp(pxLuminance, 0f, 255f);
 
                 //store luminance in data image, red channel (tho this fills ALL channels)
@@ -194,7 +201,7 @@ namespace Anime4k.Algorithm
             data = data.ChangeEachPixelParallel((x, y, p) =>
             {
                 //copy luma in R to G so we can reuse the same function.
-                //(this is not needed, but makes understanding the function a bit easyer)
+                //(this is not needed, but makes understanding the function a bit easier)
                 p.G = p.R;
 
                 //apply gaussian blur to luma in green channel on X axis
@@ -220,13 +227,13 @@ namespace Anime4k.Algorithm
         {
             float BlendColorDivide(float bottom, float top)
             {
-                if (bottom >= 255f)
+                if (bottom >= 1f)
                 {
                     return bottom;
                 }
                 else
                 {
-                    return Math.Min(top / bottom, 255f);
+                    return Math.Min(top / bottom, 1f);
                 }
             }
 
@@ -240,7 +247,6 @@ namespace Anime4k.Algorithm
                 float pseudoLines = BlendColorDivide(luma, lumaGauss);
 
                 //clamp line value
-                //original substracts 0.05, 12 should be close enough to equivalent
                 pseudoLines = 1f - Utility.Clamp(pseudoLines - 0.05f, 0f, 1f);
 
                 //save line value to BLUE
@@ -298,61 +304,86 @@ namespace Anime4k.Algorithm
         }
 
         /// <summary>
-        /// Sobel Matrix for sobel operation in GetGradient
-        /// </summary>
-        static readonly float[,] gradientSobelX = { {-1, 0, 1 },
-                                                    {-2, 0, 2 },
-                                                    {-1, 0, 1 }};
-
-        /// <summary>
-        /// Sobel Matrix for sobel operation in GetGradient
-        /// </summary>
-        static readonly float[,] gradientSobelY = { {-1, -2, -1 },
-                                                    { 0,  0,  0 },
-                                                    { 1,  2,  1 }};
-
-        /// <summary>
         /// Calculate the gradient map from the luminance (red) in the data image, store it in the alpha channel
+        /// This function uses and overwrites the GREEN and BLUE channel to store temporary data.
         /// This is the "ComputeGradientX" and "ComputeGradientY" stage.
-        /// This is (function- wise) the same as "ComputeGradient" in v0.9
         /// </summary>
         /// <param name="data">the image that stores additional data</param>
-        /// <returns>the modified data image. Now has luminance map in RED, gaussed luminance in GREEN, gaussed line data in BLUE, and gradient map in ALPHA channel</returns>
+        /// <returns>the modified data image. Now has luminance map in RED and gradient map in ALPHA channel</returns>
         Image<Rgba32> ComputeGradient(Image<Rgba32> data)
         {
-            float Sobel(float[/*3*/,/*3*/] mat, float[/*3*/,/*3*/] col)
-            {
-                return col[0, 0] * mat[0, 0] + col[0, 1] * mat[0, 1] + col[0, 2] * mat[0, 2]
-                     + col[1, 0] * mat[1, 0] + col[1, 1] * mat[1, 1] + col[1, 2] * mat[1, 2]
-                     + col[2, 0] * mat[2, 0] + col[2, 1] * mat[2, 1] + col[2, 2] * mat[2, 2];
-            }
+            //IN:  RED (luma)
+            //OUT: GREEN (xGrad), BLUE (yGrad), ALPHA (gradient map)
 
-            float GetRed(int x, int y)
+            Rgba32 GetPx(int x, int y)
             {
-                //clamp x and y
                 x = Utility.Clamp(x, 0, data.Width - 1);
                 y = Utility.Clamp(y, 0, data.Height - 1);
 
-                //return RED channel value at x,y
-                return data[x, y].R;
+                return data[x, y];
             }
 
+            //compute gradient X
+            data = data.ChangeEachPixelParallel((x, y, p) =>
+            {
+                // Kernel defination:
+                // [tl][tc][tr]
+                // [ml][mc][mr]
+                // [bl][bc][br]
+                float ml = GetPx(x - 1, y).R;
+                float mc = GetPx(x, y).R;
+                float mr = GetPx(x + 1, y).R;
+
+                //Horizontal Gradient
+                //[-1  0  1]
+                //[-2  0  2]
+                //[-1  0  1]
+                float xGrad = -ml + mr;
+
+                //Vertical Gradient
+                //[-1 -2 -1]
+                //[ 0  0  0]
+                //[ 1  2  1]
+                float yGrad = ml + mc + mc + mr;
+
+                //compute luminance gradient
+                p.G = UnFloat(xGrad);
+                p.B = UnFloat(yGrad);
+                return p;
+            }, true);
+
+            //compute gradient Y
             return data.ChangeEachPixelParallel((x, y, p) =>
             {
-                //get red channel values for sobel calculation
-                float[,] sobRed = {{GetRed(x-1, y-1), GetRed(x, y-1), GetRed(x+1, y-1)},
-                                   {GetRed(x-1, y),   GetRed(x, y),   GetRed(x+1, y) },
-                                   {GetRed(x-1, y+1), GetRed(x, y+1), GetRed(x+1, y+1) }};
+                // Kernel defination:
+                // [tl][tc][tr]
+                // [ml][mc][mr]
+                // [bl][bc][br]
+                float tcX = GetPx(x, y - 1).G;
+                float mcX = GetPx(x, y).G;
+                float bcX = GetPx(x, y + 1).G;
 
-                //do sobel operations on red channels
-                float dX = Sobel(gradientSobelX, sobRed);
-                float dY = Sobel(gradientSobelY, sobRed);
+                float tcY = GetPx(x, y - 1).B;
+                //float mcY = GetPx(x, y).B;
+                float bcY = GetPx(x, y + 1).B;
 
-                //calculate derivata. Dont take square root to save processing time
-                float derivata = (float)Math.Sqrt((dX * dX) + (dY * dY));
+                //Horizontal Gradient
+                //[-1  0  1]
+                //[-2  0  2]
+                //[-1  0  1]
+                float xGrad = tcX + mcX + mcX + bcX;
 
-                //set pixel alpha to gradient
-                p.A = UnFloat(255f - Utility.Clamp(derivata, 0f, 255f));
+                //Vertical Gradient
+                //[-1 -2 -1]
+                //[ 0  0  0]
+                //[ 1  2  1]
+                float yGrad = -tcY + bcY;
+
+                //compute luminance gradient
+                float grad = 255f - Utility.Clamp((float)Math.Sqrt(xGrad * xGrad + yGrad * yGrad), 0f, 255f);
+
+                //set pixel
+                p.A = UnFloat(grad);
                 return p;
             }, true);
         }
@@ -385,7 +416,7 @@ namespace Anime4k.Algorithm
                 y = Utility.Clamp(y, 0, img.Height - 1);
 
                 Rgba32 px = img[x, y];
-                px.A = data[x, y].R;
+                px.A = data[x, y].R;//get luminance from data.R
                 return px;
             }
 
@@ -561,17 +592,17 @@ namespace Anime4k.Algorithm
                 y = Utility.Clamp(y, 0, img.Height - 1);
 
                 Rgba32 px = img[x, y];
-                px.A = data[x, y].A;
+                px.A = data[x, y].A;//get gradient
                 return px;
             }
 
             Rgba32 GetAverage(Rgba32 cc, Rgba32 a, Rgba32 b, Rgba32 c, float realStrength)
             {
                 //calculate average based on strength
-                float aR = (cc.R * (1f - realStrength) + (Utility.Average3(a.R, b.R, c.R) * realStrength));
-                float aG = (cc.G * (1f - realStrength) + (Utility.Average3(a.G, b.G, c.G) * realStrength));
-                float aB = (cc.B * (1f - realStrength) + (Utility.Average3(a.B, b.B, c.B) * realStrength));
-                float aA = (cc.A * (1f - realStrength) + (Utility.Average3(a.A, b.A, c.A) * realStrength));
+                float aR = cc.R * (1f - realStrength) + (Utility.Average3(a.R, b.R, c.R) * realStrength);
+                float aG = cc.G * (1f - realStrength) + (Utility.Average3(a.G, b.G, c.G) * realStrength);
+                float aB = cc.B * (1f - realStrength) + (Utility.Average3(a.B, b.B, c.B) * realStrength);
+                float aA = cc.A * (1f - realStrength) + (Utility.Average3(a.A, b.A, c.A) * realStrength);
 
                 //create the resulting rgba value
                 return new Rgba32(UnFloat(aR), UnFloat(aG), UnFloat(aB), UnFloat(aA));
