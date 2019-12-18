@@ -32,7 +32,6 @@ namespace Anime4k.Algorithm
         {
             for (int p = 0; p < passes; p++)
             {
-                //execute passes
                 #region Prepare DATA image
                 //compute luminance into DATA RED Channel
                 Image<Rgba32> data = GetLuminance(img);

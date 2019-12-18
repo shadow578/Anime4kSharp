@@ -28,40 +28,91 @@ namespace Anime4k.Algorithm
         /// <returns>the processed image</returns>
         public Image<Rgba32> Push(Image<Rgba32> img, float strengthColor, float strengthGradient, int passes = 2, bool debugSavePhases = false)
         {
-            //clamp & calc strenght for algorithm
-            strengthColor *= 255f;
-            strengthColor = Utility.Clamp(strengthColor, 0, 65535);
-
-            strengthGradient *= 255f;
-            strengthGradient = Utility.Clamp(strengthGradient, 0, 65535);
-
-            //create ./debug/ if needed
-            if (debugSavePhases && !Directory.Exists(DebugDirectory))
-            {
-                Directory.CreateDirectory(DebugDirectory);
-            }
-
-            //execute laps
             for (int p = 0; p < passes; p++)
             {
                 //get luminance into alpha channel
                 img = GetLuminance(img);
-                if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-1_get-lum.png"));
+                if (debugSavePhases) DBSaveImg(img, p, "1_get-lum");
 
                 //push color (INCLUDING alpha channel)
                 img = PushColor(img, strengthColor);
-                if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-2_push-col.png"));
+                if (debugSavePhases) DBSaveImg(img, p, "2_push-col");
 
                 //get gradient into alpha channel
                 img = GetGradient(img);
-                if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-3_get-grad.png"));
+                if (debugSavePhases) DBSaveImg(img, p, "3_get-grad");
 
                 //push gradient
                 img = PushGradient(img, strengthGradient);
-                if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-4_push-grad.png"));
+                if (debugSavePhases) DBSaveImg(img, p, "4_push-grad");
+
+                //remove information in alpha channel (only for c#)
+                img = ResetAlpha(img);
+                if (debugSavePhases) DBSaveImg(img, p, "6_img_reset-alpha");
             }
 
             return img;
+        }
+
+        /// <summary>
+        /// Save a sub-stage image to the debug dir
+        /// </summary>
+        /// <param name="img">the image to save</param>
+        /// <param name="pass">which pass this image is from</param>
+        /// <param name="name">the name of the image (no .png)</param>
+        /// <param name="separateChannels">if true, each channel is saved as separate image</param>
+        void DBSaveImg(Image<Rgba32> img, int pass, string name, bool separateChannels = true)
+        {
+            if (separateChannels)
+            {
+                string svDir = Path.Combine(DebugDirectory, $"{pass}--{name}");
+                if (!Directory.Exists(svDir))
+                {
+                    Directory.CreateDirectory(svDir);
+                }
+
+                //save each channel separately
+                Image<Rgba32> chR = img.ChangeEachPixelParallel((x, y, p) => { return new Rgba32(p.R, p.R, p.R, 255); }, false);
+                Image<Rgba32> chG = img.ChangeEachPixelParallel((x, y, p) => { return new Rgba32(p.G, p.G, p.G, 255); }, false);
+                Image<Rgba32> chB = img.ChangeEachPixelParallel((x, y, p) => { return new Rgba32(p.B, p.B, p.B, 255); }, false);
+                Image<Rgba32> chA = img.ChangeEachPixelParallel((x, y, p) => { return new Rgba32(p.A, p.A, p.A, 255); }, false);
+
+                chR.Save(Path.Combine(svDir, "0-RED.png"));
+                chG.Save(Path.Combine(svDir, "1-GREEN.png"));
+                chB.Save(Path.Combine(svDir, "2-BLUE.png"));
+                chA.Save(Path.Combine(svDir, "3-ALPHA.png"));
+
+                //dispose channel images
+                chR.Dispose();
+                chG.Dispose();
+                chB.Dispose();
+                chA.Dispose();
+
+                //save original image
+                img.Save(Path.Combine(svDir, $"4-ORG.png"));
+            }
+            else
+            {
+                img.Save(Path.Combine(DebugDirectory, $"{pass}--{name}.png"));
+            }
+        }
+
+        /// <summary>
+        /// Convert a color value float in range 0f - 255f to a byte of same value
+        /// Also apply clamping
+        /// </summary>
+        /// <param name="c">the color value to unfloat</param>
+        /// <returns>the value as byte</returns>
+        byte UnFloat(float c)
+        {
+            //push to middle
+            c += 0.5f;
+
+            //clamp to 0 - 255
+            c = Utility.Clamp(c, 0f, 255f);
+
+            //convert to byte
+            return (byte)Math.Floor(c);
         }
 
         /// <summary>
@@ -81,7 +132,7 @@ namespace Anime4k.Algorithm
                 pxLuminance = Utility.Clamp(pxLuminance, 0f, 255f);
 
                 //create new pixel
-                return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(pxLuminance));
+                return new Rgba32(p.R, p.G, p.B, UnFloat(pxLuminance));
             }, true);
         }
 
@@ -95,11 +146,12 @@ namespace Anime4k.Algorithm
         {
             Rgba32 GetLargest(Rgba32 cc, Rgba32 lightest, Rgba32 a, Rgba32 b, Rgba32 c)
             {
-                float aR = (cc.R * (255f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength)) / 255f;
-                float aG = (cc.G * (255f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength)) / 255f;
-                float aB = (cc.B * (255f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength)) / 255f;
-                float aA = (cc.A * (255f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength)) / 255f;
-                return (aA > lightest.A) ? new Rgba32(aR / 255f, aG / 255f, aB / 255f, aA / 255f) : lightest;
+                float aR = cc.R * (1f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength);
+                float aG = cc.G * (1f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength);
+                float aB = cc.B * (1f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength);
+                float aA = cc.A * (1f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength);
+
+                return (aA > lightest.A) ? new Rgba32(UnFloat(aR), UnFloat(aG), UnFloat(aB), UnFloat(aA)) : lightest;
             }
 
             return img.ChangeEachPixelParallel((x, y, mc) =>
@@ -279,7 +331,7 @@ namespace Anime4k.Algorithm
                 }
                 else
                 {
-                    return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(255 - Math.Sqrt(derivataSq)));
+                    return new Rgba32(p.R, p.G, p.B, UnFloat(255f - (float)Math.Sqrt(derivataSq)));
                 }
             }, true);
         }
@@ -294,17 +346,11 @@ namespace Anime4k.Algorithm
         {
             Rgba32 GetAverage(Rgba32 cc, Rgba32 a, Rgba32 b, Rgba32 c)
             {
-                float aR = (cc.R * (255f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength)) / 255f;
-                float aG = (cc.G * (255f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength)) / 255f;
-                float aB = (cc.B * (255f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength)) / 255f;
-                float aA = (cc.A * (255f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength)) / 255f;
-                return new Rgba32(aR / 255f, aG / 255f, aB / 255f, aA / 255f);
-            }
-
-            Rgba32 ResetAlpha(Rgba32 c)
-            {
-                c.A = 255;
-                return c;
+                float aR = cc.R * (1f - strength) + (Utility.Average3(a.R, b.R, c.R) * strength);
+                float aG = cc.G * (1f - strength) + (Utility.Average3(a.G, b.G, c.G) * strength);
+                float aB = cc.B * (1f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength);
+                float aA = cc.A * (1f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength);
+                return new Rgba32(UnFloat(aR), UnFloat(aG), UnFloat(aB), UnFloat(aA));
             }
 
             return img.ChangeEachPixelParallel((x, y, mc) =>
@@ -347,7 +393,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > mc.A && minL > maxD)
                 {
-                    return ResetAlpha(GetAverage(mc, tl, tc, tr));
+                    return GetAverage(mc, tl, tc, tr);
                 }
                 else
                 {
@@ -356,7 +402,7 @@ namespace Anime4k.Algorithm
 
                     if (minL > mc.A && minL > maxD)
                     {
-                        return ResetAlpha(GetAverage(mc, br, bc, bl));
+                        return GetAverage(mc, br, bc, bl);
                     }
                 }
                 #endregion
@@ -367,7 +413,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > maxD)
                 {
-                    return ResetAlpha(GetAverage(mc, mr, tc, tr));
+                    return GetAverage(mc, mr, tc, tr);
                 }
                 else
                 {
@@ -376,7 +422,7 @@ namespace Anime4k.Algorithm
 
                     if (minL > maxD)
                     {
-                        return ResetAlpha(GetAverage(mc, bl, ml, bc));
+                        return GetAverage(mc, bl, ml, bc);
                     }
                 }
                 #endregion
@@ -387,7 +433,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > mc.A && minL > maxD)
                 {
-                    return ResetAlpha(GetAverage(mc, mr, br, tr));
+                    return GetAverage(mc, mr, br, tr);
                 }
                 else
                 {
@@ -396,7 +442,7 @@ namespace Anime4k.Algorithm
 
                     if (minL > mc.A && minL > maxD)
                     {
-                        return ResetAlpha(GetAverage(mc, ml, tl, bl));
+                        return GetAverage(mc, ml, tl, bl);
                     }
                 }
                 #endregion
@@ -407,7 +453,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > maxD)
                 {
-                    return ResetAlpha(GetAverage(mc, mr, br, bc));
+                    return GetAverage(mc, mr, br, bc);
                 }
                 else
                 {
@@ -416,12 +462,28 @@ namespace Anime4k.Algorithm
 
                     if (minL > maxD)
                     {
-                        return ResetAlpha(GetAverage(mc, tc, ml, tl));
+                        return GetAverage(mc, tc, ml, tl);
                     }
                 }
                 #endregion
 
-                return ResetAlpha(mc);
+                return mc;
+            }, true);
+        }
+
+        /// <summary>
+        /// Resets the Alpha channel of every pixel to 255
+        /// This does not correspond to any stage in the glsl shaders, since it's not needed for glsl (no alpha blending (enabled) => alpha is ignored when rendering)
+        /// This is only needed since we (may) save the image in a format that supports transparency.
+        /// </summary>
+        /// <param name="img">the image to modify</param>
+        /// <returns>the modified image</returns>
+        Image<Rgba32> ResetAlpha(Image<Rgba32> img)
+        {
+            return img.ChangeEachPixelParallel((x, y, p) =>
+            {
+                p.A = 255;
+                return p;
             }, true);
         }
     }
