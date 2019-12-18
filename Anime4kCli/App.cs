@@ -72,7 +72,7 @@ namespace Anime4kCli
             Size targetSize = Size.Empty;
             float strengthColor = -1f;
             float strengthGradient = -1f;
-            int passes = 2;
+            int passes = 1;
             bool debug = false;
             Anime4KVersion version = Anime4KVersion.v09;
 
@@ -145,7 +145,7 @@ namespace Anime4kCli
 
             //get version
             if (cArgs.TryGetValue("version", "v", out string verStr)
-                && !Enum.TryParse(verStr, out version))
+                && !Enum.TryParse(verStr, true, out version))
             {
                 Console.WriteLine($"Failed to parse anime4k version from input string \"{verStr}\"!");
             }
@@ -169,9 +169,9 @@ Target Resolution:  {targetSize.Width} x {targetSize.Height}
 Use Resolution:     {(hasTargetSize ? "YES" : "NO")}
 --Anime4K-Config----------------------------------
 Anime4K Version:        {version}
-Anime4K Laps:           {passes}
-Color Push Strength:    {strengthColor}
-Gradient Push Strength: {strengthGradient}
+Anime4K Passes:         {passes}
+Color Push Strength:    {(strengthColor == -1 ? "AUTO" : strengthColor.ToString())}
+Gradient Push Strength: {(strengthGradient == -1 ? "AUTO" : strengthGradient.ToString())}
 Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
 ");
 
@@ -187,8 +187,8 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                 case Anime4KVersion.v10RC2:
                 {
                     //Create anime4k scaler version 1.0 RC2
-                    throw new NotImplementedException("Anime4K 1.0 RC2 is not implemented!");
-                    //break;
+                    scaler = new Anime4KScaler(new Anime4K010RC2());
+                    break;
                 }
                 case Anime4KVersion.v09:
                 default:
@@ -198,7 +198,6 @@ Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
                     break;
                 }
             }
-
             #endregion
 
             #region Run Anime4K

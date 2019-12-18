@@ -42,7 +42,6 @@ namespace Anime4k.Algorithm
             }
 
             //execute laps
-            Image<Rgba32> buf = null;
             for (int p = 0; p < passes; p++)
             {
                 //get luminance into alpha channel
@@ -50,21 +49,15 @@ namespace Anime4k.Algorithm
                 if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-1_get-lum.png"));
 
                 //push color (INCLUDING alpha channel)
-                buf = PushColor(img, strengthColor);
-                img.Dispose();
-                img = buf;
+                img = PushColor(img, strengthColor);
                 if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-2_push-col.png"));
 
                 //get gradient into alpha channel
-                buf = GetGradient(img);
-                img.Dispose();
-                img = buf;
+                img = GetGradient(img);
                 if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-3_get-grad.png"));
 
                 //push gradient
-                buf = PushGradient(img, strengthGradient);
-                img.Dispose();
-                img = buf;
+                img = PushGradient(img, strengthGradient);
                 if (debugSavePhases) img.Save(Path.Combine(DebugDirectory, $@"{p}-4_push-grad.png"));
             }
 
@@ -89,7 +82,7 @@ namespace Anime4k.Algorithm
 
                 //create new pixel
                 return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(pxLuminance));
-            });
+            }, true);
         }
 
         /// <summary>
@@ -227,7 +220,7 @@ namespace Anime4k.Algorithm
 
                 //set pixel
                 return lightest;
-            });
+            }, true);
         }
 
         /// <summary>
@@ -288,7 +281,7 @@ namespace Anime4k.Algorithm
                 {
                     return new Rgba32(p.R, p.G, p.B, (byte)Math.Floor(255 - Math.Sqrt(derivataSq)));
                 }
-            });
+            }, true);
         }
 
         /// <summary>
@@ -306,6 +299,12 @@ namespace Anime4k.Algorithm
                 float aB = (cc.B * (255f - strength) + (Utility.Average3(a.B, b.B, c.B) * strength)) / 255f;
                 float aA = (cc.A * (255f - strength) + (Utility.Average3(a.A, b.A, c.A) * strength)) / 255f;
                 return new Rgba32(aR / 255f, aG / 255f, aB / 255f, aA / 255f);
+            }
+
+            Rgba32 ResetAlpha(Rgba32 c)
+            {
+                c.A = 255;
+                return c;
             }
 
             return img.ChangeEachPixelParallel((x, y, mc) =>
@@ -338,8 +337,6 @@ namespace Anime4k.Algorithm
                 Rgba32 bc = img[x, y + yPro];
                 Rgba32 br = img[x + xPro, y + yPro];
 
-                //default lightest color to current pixel
-                Rgba32 lightest = mc;
                 float maxD;
                 float minL;
                 #endregion
@@ -350,16 +347,16 @@ namespace Anime4k.Algorithm
 
                 if (minL > mc.A && minL > maxD)
                 {
-                    lightest = GetAverage(mc, tl, tc, tr);
+                    return ResetAlpha(GetAverage(mc, tl, tc, tr));
                 }
                 else
                 {
-                    maxD = Utility.Max3(tl.A, tc.A, br.A);
+                    maxD = Utility.Max3(tl.A, tc.A, tr.A);
                     minL = Utility.Min3(br.A, bc.A, bl.A);
 
                     if (minL > mc.A && minL > maxD)
                     {
-                        lightest = GetAverage(mc, br, bc, bl);
+                        return ResetAlpha(GetAverage(mc, br, bc, bl));
                     }
                 }
                 #endregion
@@ -370,7 +367,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > maxD)
                 {
-                    lightest = GetAverage(mc, mr, tc, tr);
+                    return ResetAlpha(GetAverage(mc, mr, tc, tr));
                 }
                 else
                 {
@@ -379,7 +376,7 @@ namespace Anime4k.Algorithm
 
                     if (minL > maxD)
                     {
-                        lightest = GetAverage(mc, bl, ml, bc);
+                        return ResetAlpha(GetAverage(mc, bl, ml, bc));
                     }
                 }
                 #endregion
@@ -390,7 +387,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > mc.A && minL > maxD)
                 {
-                    lightest = GetAverage(mc, mr, br, tr);
+                    return ResetAlpha(GetAverage(mc, mr, br, tr));
                 }
                 else
                 {
@@ -399,7 +396,7 @@ namespace Anime4k.Algorithm
 
                     if (minL > mc.A && minL > maxD)
                     {
-                        lightest = GetAverage(mc, ml, tl, bl);
+                        return ResetAlpha(GetAverage(mc, ml, tl, bl));
                     }
                 }
                 #endregion
@@ -410,7 +407,7 @@ namespace Anime4k.Algorithm
 
                 if (minL > maxD)
                 {
-                    lightest = GetAverage(mc, mr, br, bc);
+                    return ResetAlpha(GetAverage(mc, mr, br, bc));
                 }
                 else
                 {
@@ -419,14 +416,13 @@ namespace Anime4k.Algorithm
 
                     if (minL > maxD)
                     {
-                        lightest = GetAverage(mc, tc, ml, tl);
+                        return ResetAlpha(GetAverage(mc, tc, ml, tl));
                     }
                 }
                 #endregion
 
-                //reset alpha channel since it is no longer needed
-                return new Rgba32(lightest.R, lightest.G, lightest.B, 255);
-            });
+                return ResetAlpha(mc);
+            }, true);
         }
     }
 }

@@ -11,7 +11,6 @@ namespace Anime4k.Util
     public static class Utility
     {
         #region String Manipulation
-
         /// <summary>
         /// Does the string start with any of the given sub strings?
         /// </summary>
@@ -27,10 +26,23 @@ namespace Anime4k.Util
 
             return false;
         }
-
         #endregion
 
-        #region Math
+        #region Math, int
+        /// <summary>
+        /// Clamp a int to be between the min and max value
+        /// </summary>
+        /// <param name="val">the value to clamp</param>
+        /// <param name="min">the minimum value to clamp to</param>
+        /// <param name="max">the maximum value to clamp to</param>
+        /// <returns>the clamped value</returns>
+        public static int Clamp(int val, int min, int max)
+        {
+            return (val < min) ? min : (val > max) ? max : val;
+        }
+        #endregion
+
+        #region Math, float
         /// <summary>
         /// Clamp a float to be between the min and max value
         /// </summary>
@@ -81,7 +93,6 @@ namespace Anime4k.Util
         #endregion
 
         #region Pixels
-
         /// <summary>
         /// Calculate the luminance of a pixel (same as .NET Color.GetBrighness())
         /// </summary>
@@ -103,7 +114,6 @@ namespace Anime4k.Util
 
             return (max + min) / 2;
         }
-
         #endregion
 
         #region Image Manipulation
@@ -143,8 +153,9 @@ namespace Anime4k.Util
         /// <typeparam name="T">the pixel format of the image</typeparam>
         /// <param name="img">the image to use</param>
         /// <param name="pixelFunction">the function to execute for every pixel</param>
+        ///  <param name="disposeOld">if true, the image img is disposed before the function returns the new image</param>
         /// <returns>the modified image</returns>
-        public static Image<T> ChangeEachPixel<T>(this Image<T> img, PixelFunc<T> pixelFunction) where T : struct, IPixel<T>
+        public static Image<T> ChangeEachPixel<T>(this Image<T> img, PixelFunc<T> pixelFunction, bool disposeOld) where T : struct, IPixel<T>
         {
             //create output image
             Image<T> output = new Image<T>(img.Width, img.Height);
@@ -158,6 +169,11 @@ namespace Anime4k.Util
                 }
             }
 
+            //dispose old image
+            if (disposeOld)
+            {
+                img.Dispose();
+            }
             return output;
         }
 
@@ -168,8 +184,9 @@ namespace Anime4k.Util
         /// <typeparam name="T">the pixel format of the image</typeparam>
         /// <param name="img">the image to use</param>
         /// <param name="pixelFunction">the function to execute for every pixel</param>
+        /// <param name="disposeOld">if true, the image img is disposed before the function returns the new image</param>
         /// <returns>the modified image</returns>
-        public static Image<T> ChangeEachPixelParallel<T>(this Image<T> img, PixelFunc<T> pixelFunction) where T : struct, IPixel<T>
+        public static Image<T> ChangeEachPixelParallel<T>(this Image<T> img, PixelFunc<T> pixelFunction, bool disposeOld) where T : struct, IPixel<T>
         {
             //create output image
             Image<T> output = new Image<T>(img.Width, img.Height);
@@ -182,6 +199,12 @@ namespace Anime4k.Util
                     output[px, py] = pixelFunction(px, py, img[px, py]);
                 }
             });
+
+            //dispose old image
+            if (disposeOld)
+            {
+                img.Dispose();
+            }
             return output;
         }
         #endregion
