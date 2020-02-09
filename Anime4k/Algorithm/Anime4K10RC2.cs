@@ -64,12 +64,12 @@ namespace Anime4k.Algorithm
                 //refine thin lines based on luma (RED) and line map (BLUE),
                 //overwrite original image 
                 img = PushThinLines(img, data, strengthColor);
-                if (debugSavePhases) DBSaveImg(img, p, "4_img_push-thin-lines");
+                if (debugSavePhases) DBSaveImg(img, p, "4_img_push-thin-lines", saveAlphaDumped: true);
 
                 //refine gradients based on luma (RED), line map (BLUE) and gradient map (ALPHA), 
                 //overwrite original image 
                 img = PushLines(img, data, strengthGradient);
-                if (debugSavePhases) DBSaveImg(img, p, "5_img_push-lines");
+                if (debugSavePhases) DBSaveImg(img, p, "5_img_push-lines", saveAlphaDumped: true);
 
                 //run 1 iteration of fast fxaa
                 //TODO: fix fxaa
@@ -92,7 +92,8 @@ namespace Anime4k.Algorithm
         /// <param name="pass">which pass this image is from</param>
         /// <param name="name">the name of the image (no .png)</param>
         /// <param name="separateChannels">if true, each channel is saved as separate image</param>
-        void DBSaveImg(Image<Rgba32> img, int pass, string name, bool separateChannels = true)
+        /// <param name="saveAlphaDumped">if true, a version of the image with alpha channel dumped is saved</param>
+        void DBSaveImg(Image<Rgba32> img, int pass, string name, bool separateChannels = true, bool saveAlphaDumped = false)
         {
             if (separateChannels)
             {
@@ -118,6 +119,19 @@ namespace Anime4k.Algorithm
                 chG.Dispose();
                 chB.Dispose();
                 chA.Dispose();
+
+                //save original image with alpha dumped
+                if (saveAlphaDumped)
+                {
+                    //dump alpha channel on a copy of the image
+                    Image<Rgba32> noAlpha = img.ChangeEachPixelParallel((x, y, p) => { return new Rgba32(p.R, p.G, p.B, 255); }, false);
+
+                    //save the image
+                    noAlpha.Save(Path.Combine(svDir, "5-NO_ALPHA.png"));
+
+                    //dispose the image
+                    noAlpha.Dispose();
+                }
 
                 //save original image
                 img.Save(Path.Combine(svDir, $"4-ORG.png"));
@@ -197,13 +211,17 @@ namespace Anime4k.Algorithm
                 return Utility.Clamp(gauss, 0f, 255f);
             }
 
+            //copy luma from R to G so we can reuse the same gauss funciton
+            data = data.ChangeEachPixelParallel((x, y, p) =>
+            {
+                p.G = p.R;
+                return p;
+            }, true);
+
+
             //compute gaussian X
             data = data.ChangeEachPixelParallel((x, y, p) =>
             {
-                //copy luma in R to G so we can reuse the same function.
-                //(this is not needed, but makes understanding the function a bit easier)
-                p.G = p.R;
-
                 //apply gaussian blur to luma in green channel on X axis
                 p.G = UnFloat(LumaGauss7(x, y, p, 1, 0));
                 return p;
