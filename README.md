@@ -38,6 +38,20 @@ output.Save("your/output/image.png");
 As bloc97 described in his [pseudo-preprint](https://github.com/bloc97/Anime4K/blob/master/Preprint.md), the Anime4K algorithm is actually  quite simple. <br/>
 I, however, will only give a brief overview of the algorithm. If you want to read more, I highly suggest bloc97's preprint.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+#THIS IS NOW LEGACY
 The Algorithm itself can be summed up in five steps, one of which beign the initial upscaling of the image.
 
 Let's assume we start with the following image: <br/>
@@ -72,6 +86,21 @@ The output of this step is our final result (assuming we only do one pass) <br/>
 
 To better show the differences, heres a zoomed- in comparison between bicubic interpolation and two passes of Anime4K: <br/>
 <img src="/ASSETS/sbs-final-compare.png?raw=true" width="1000">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## But Why?
