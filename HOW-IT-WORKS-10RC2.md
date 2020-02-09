@@ -11,37 +11,38 @@ Let's assume we start with the following image: <br/>
 <img src="/ASSETS/step-by-step/10/sbs-0-input-image.png?raw=true" width="300">
 
 We just scale the Image up using a arbitrary Image interpolation algorithm (bloc97 suggests bicubic interpolation, which is also what I went with)  <br/>
-This already sums up the first mayor step.<br/>
+This is our Image after scaling it up using bicubic interpolation:<br/>
 <img src="/ASSETS/step-by-step/10/sbs-1-scaled-up.png?raw=true" width="300">
 
 
 ### Step 2: Prepare Image Maps
 
-In this Step we create Maps from the input Image. These Maps contain information about the Image's Structure and are used in the following steps.<br/>
-The Original (GLSL) implementation uses Texture buffers to hold the Data, my implementation just uses a secondary data image.<br/>
-So, let's start with the first step: Calculating the Luminance of the input image into a channel of our data image. (I'll call this channel "Luminance" from now on)<br/>
+In this Step we create "Maps" from the input Image. These Maps contain information about the Image's Structure and are used in the following steps.<br/>
+The Original (GLSL) implementation uses Texture buffers to hold the Data, my implementation just uses a secondary data image instead.<br/>
+So, let's start with the first step: <br/>
+Calculating the Luminance of the input image into a channel of our data image (I'll call this channel "Luminance" from now on).<br/>
 The Luminance is just a grayscale version of the image and looks like this:<br/>
 <img src="/ASSETS/step-by-step/10/sbs-2-data-luma.png?raw=true" width="300">
 
 We now use the Luminance we just calculated to create a gradient map of the image. The gradient map is stored into another channel of our data image (I'll call this one "Gradient").<br/>
 In the Original GLSL code, this step comes last. However, I figured I could put it earlyer so I can use my data image for temprary values. Also, this step only uses the Luminance anyway...<br/>
-Now, let's see what our Gradient map looks like:
+Now, let's see what our Gradient map looks like: <br/>
 <img src="/ASSETS/step-by-step/10/sbs-3-data-gradient.png?raw=true" width="300">
 
 Cool, so what now? Well, we take our Luminance and run a [Gauss Filter](https://en.wikipedia.org/wiki/Gaussian_filter) over it. 
-The result of this filter is then Saved into another channel of our data Image. This one I'll call "Gaussed Luminance"<br/>
-The Gaussed Luminance looks something like this, tho it's not really interesting since it's just a blurred version of our Luminance:
+The result of this filter is then saved into another channel of our data Image. This one I'll call "Gaussed Luminance".<br/>
+The Gaussed Luminance looks something like this, tho it's not really interesting since it's just a blurred version of our Luminance: <br/>
 <img src="/ASSETS/step-by-step/10/sbs-4-data-luma-gauss.png?raw=true" width="300">
 
-So far, so good. Now, Let's use the Luminance we calculated and our Gaussed Luminance to find where we have Lines in our Image.<br/>
+So far, so good. Now, Let's use the Luminance we calculated and our Gaussed Luminance to find where we have lines in our Image.
 And let's save that information into another channel of our data image, and call it "Line Map".<br/>
 This Line Map just contains, well, the lines in the image. Which we need since we want to enhance them... Quite straight- forward, right?<br/>
-Let's just quickly take a look at the Line map:
+Let's just quickly take a look at the Line map: <br/>
 <img src="/ASSETS/step-by-step/10/sbs-5-data-line-map.png?raw=true" width="300">
 
 Now, before we get to the spicy stuff, we just quickly have to run another [Gauss Filter](https://en.wikipedia.org/wiki/Gaussian_filter) over the Line Map.<br/>
 The result of this step just overrides our previous Line Map. I'll give it a unique name anyway, just for reference. I think "Gaussed Line Map" fits quite well.<br/>
-This is how our Gaussed Line Map looks like:
+This is how our Gaussed Line Map looks like: <br/>
 <img src="/ASSETS/step-by-step/10/sbs-6-data-line-map-gauss.png?raw=true" width="300">
 
 
@@ -68,9 +69,9 @@ This also gets rid of some noise that is caused by the interpolation.<br/>
 
 If we were working with Anime4K 0.9, we'd be done now.<br/>
 However, Anime4K 1.0+ introduced an additionaly FXAA step to help make the image look smoother (and better).<br/>
-Sadly, I couldn't figure out how the FXAA actually works (and I failed to implement it), so I cannot show you a Image of this step.<br/>
+Sadly, I couldn't figure out how the FXAA actually works, so I cannot show you a Image of this step.<br/>
 If you want to read more about the FXAA step, [here](https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/3/) is an explanation how it works (and how you can implement it).<br/>
-<img src="/ASSETS/step-by-step/10/sbs-9-fxaa-until-i-fix-it.png?raw=true" width="300">
+<img src="/ASSETS/step-by-step/10/sbs-9-fxaa-until-i-fix-it.jpg?raw=true" width="300">
 
 Hold on - Before we save the Image, we have to dump the alpha channel of the image.<br/>
 Otherwise, we'd get a output image that still contains the line map in its alpha channel, resulting in a image with transparent lines (which looks really weird).<br/>
@@ -79,7 +80,6 @@ The output of this step is our final output image (assuming we only do one pass)
 
 
 To better show the differences, heres a zoomed- in comparison between bicubic interpolation and the final Anime4K image: <br/>
-[IMG_FINAL_COMPARE]
 <img src="/ASSETS/step-by-step/10/sbs-final-compare.png?raw=true" width="1000">
 
 
