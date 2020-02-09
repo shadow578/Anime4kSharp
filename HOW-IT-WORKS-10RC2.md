@@ -98,6 +98,9 @@ Heres a Table that shows the Key Differences:
 
 ### Disclaimer
 
+All art assets used are for demonstration and educational purposes. All rights are reserved to their original owners. If you (as a person or a company) own the art and do not wish it to be associated with this project, please contact me (eg by opening a Github issue) and I will gladly take it down.  <br/>
+Images used for Demonstration are from [Cells At Work](https://myanimelist.net/anime/37141/Hataraku_Saibou_TV).
+
 * This Document is based on Anime4K 1.0 RC2 (FULL). Other (newer) Versions of Anime4K may work somewhat differently
 * I wrote this Document almost two months after actively working on the Project. It may not be completely correct.
 * I do, by __no__ means claim to be an expert when it comes to Anime4K. (Tho I think this explanation should capture the overall principle quite well)

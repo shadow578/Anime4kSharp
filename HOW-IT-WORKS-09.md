@@ -38,6 +38,10 @@ To better show the differences, heres a zoomed- in comparison between bicubic in
 <img src="/ASSETS/step-by-step/09/sbs-final-compare.png?raw=true" width="1000">
 
 ### Disclaimer
+
+All art assets used are for demonstration and educational purposes. All rights are reserved to their original owners. If you (as a person or a company) own the art and do not wish it to be associated with this project, please contact me (eg by opening a Github issue) and I will gladly take it down. <br/>
+Images used for Demonstration are from [Cells At Work](https://myanimelist.net/anime/37141/Hataraku_Saibou_TV).
+
 * This Document is based on Anime4K 0.9. Other (newer) Versions of Anime4K do work somewhat differently
 * I do, by __no__ means claim to be an expert when it comes to Anime4K. (Tho I think this explanation should capture the overall principle quite well)
 * Credits for Anime4K go to bloc97
