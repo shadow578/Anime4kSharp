@@ -37,13 +37,13 @@ The Gaussed Luminance looks something like this, tho it's not really interesting
 So far, so good. Now, Let's use the Luminance we calculated and our Gaussed Luminance to find where we have lines in our Image.
 And let's save that information into another channel of our data image, and call it "Line Map".<br/>
 This Line Map just contains, well, the lines in the image. Which we need since we want to enhance them... Quite straight- forward, right?<br/>
-Let's just quickly take a look at the Line map: <br/>
-<img src="/ASSETS/step-by-step/10/sbs-5-data-line-map.png?raw=true" width="300">
+Let's just quickly take a look at the Line map (Left is original, Right is inverted): <br/>
+<img src="/ASSETS/step-by-step/10/sbs-5-data-line-map.png?raw=true" width="610">
 
 Now, before we get to the spicy stuff, we just quickly have to run another [Gauss Filter](https://en.wikipedia.org/wiki/Gaussian_filter) over the Line Map.<br/>
 The result of this step just overrides our previous Line Map. I'll give it a unique name anyway, just for reference. I think "Gaussed Line Map" fits quite well.<br/>
-This is how our Gaussed Line Map looks like: <br/>
-<img src="/ASSETS/step-by-step/10/sbs-6-data-line-map-gauss.png?raw=true" width="300">
+This is how our Gaussed Line Map looks like (Again, Left is original, Right is inverted): <br/>
+<img src="/ASSETS/step-by-step/10/sbs-6-data-line-map-gauss.png?raw=true" width="610">
 
 
 ### Step 3: Push Colors Towards The Lines
