@@ -752,6 +752,111 @@ namespace Anime4k.Algorithm
             }, true);
         }
 
+
+        /// <summary>
+        /// Applies 1 iteration of fast FXAA to the image
+        /// https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/3/
+        /// C# implementation based on:
+        /// http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
+        /// 
+        /// This is the "PostFxaa" stage.
+        /// This is new in v1.0 
+        /// </summary>
+        /// <param name="img">the image to modify</param>
+        /// <param name="data">the image that stores additional data. R=Luminance, G=Gaussed Luminance, B=Line map, A=Gradient map</param>
+        /// <returns>the modified image img (with fxaa applied). data image is NOT modified</returns>
+        [Obsolete("Not finished - Never will")]
+        Image<Rgba32> ApplyFxaa(Image<Rgba32> img, Image<Rgba32> data)
+        {
+            const float EDGE_THRESHOLD_MIN = 255f * 0.0312f;
+            const float EDGE_THRESHOLD_MAX = 255f * 0.1250f;
+
+            float GetLuma(int x, int y)
+            {
+                return data[x, y].R;
+            }
+
+            return img.ChangeEachPixelParallel((x, y, p) =>
+            {
+                #region Setup Luma Kernel
+                //get luma at and around center
+                // [tl][tc][tr]
+                // [ml][mc][mr]
+                // [bl][bc][br]
+                float lumTR = GetLuma(x + 1, y + 1);
+                float lumTC = GetLuma(x, y + 1);
+                float lumTL = GetLuma(x - 1, y + 1);
+
+                float lumMR = GetLuma(x + 1, y);
+                float lumMC = GetLuma(x, y);
+                float lumML = GetLuma(x - 1, y);
+
+                float lumBR = GetLuma(x + 1, y - 1);
+                float lumBC = GetLuma(x, y - 1);
+                float lumBL = GetLuma(x - 1, y - 1);
+                #endregion
+
+                //find the max and min luma around center pixel
+                float lumaMin = Math.Min(lumMC, Math.Min(Math.Min(lumBC, lumTC), Math.Min(lumMR, lumML)));
+                float lumaMax = Math.Max(lumMC, Math.Max(Math.Max(lumBC, lumTC), Math.Max(lumMR, lumML)));
+
+                //calculate the delta between luma min and max
+                float lumaDelta = lumaMax - lumaMin;
+
+                //if our luma delta is really low OR we are in a dark area, we are not on a edge.
+                //don't perform fxaa on not- edges
+                if (lumaDelta < Math.Max(EDGE_THRESHOLD_MIN, lumaMax * EDGE_THRESHOLD_MAX))
+                {
+                    //no edge, dont modify
+                    return p;
+                }
+
+
+                //combine the lumas of the four edges for future computation
+                float lumUpDown = lumTC + lumBC;
+                float lumLeftRight = lumML + lumMR;
+
+                //combine the lumas of the corners for future computation
+                float lumLeftCorners = lumBL + lumTL;
+                float lumBottomCorners = lumBL + lumBR;
+                float lumRightCorners = lumBR + lumTR;
+                float lumTopCorners = lumTR + lumTL;
+
+
+                //compute a estimate of the gradient along the horizontal and the vertical
+                float edgeHorizontal = Math.Abs(-2f * lumML + lumLeftCorners)
+                                    + Math.Abs(-2f * lumMC + lumUpDown) * 2f
+                                    + Math.Abs(-2f * lumMR + lumRightCorners);
+                float edgeVertical = Math.Abs(-2f * lumTC + lumTopCorners)
+                                    + Math.Abs(-2 * lumMC + lumLeftRight) * 2f
+                                    + Math.Abs(-2f * lumBC + lumBottomCorners);
+
+                //is our edge horizontal or vertical?
+                bool isHorizontalEdge = edgeHorizontal >= edgeVertical;
+
+
+                //select two neighboring pixels in opposite direction to the detected edge
+                float lumA = isHorizontalEdge ? lumBC : lumML;
+                float lumB = isHorizontalEdge ? lumTC : lumMR;
+
+                //compute the gradients for those directions
+                float lumGradA = lumA - lumMC;
+                float lumGradB = lumB - lumMC;
+
+                //what direction has the steepest gradient?
+                bool isATheSteepest = Math.Abs(lumGradA) >= Math.Abs(lumGradB);
+
+                //normalize the gradient in that direction
+                float lumGradScaled = Math.Max(Math.Abs(lumGradA), Math.Abs(lumGradB)) * 0.25f;
+
+                //Umm... FXAA seems to require interpolation between the pixels, which this does not have...
+                //FXAA won't really work this way
+                //Who needs FXAA anyway?
+
+                return p;
+            }, true);
+        }
+
         /// <summary>
         /// Applies 1 iteration of fast FXAA to the image
         /// https://www.geeks3d.com/20110405/fxaa-fast-approximate-anti-aliasing-demo-glsl-opengl-test-radeon-geforce/3/
@@ -764,7 +869,8 @@ namespace Anime4k.Algorithm
         /// <param name="data">the image that stores additional data. R=Luminance, G=Gaussed Luminance, B=Line map, A=Gradient map</param>
         /// <param name="strength">how strong the gradient is pushed (0.0-255.0) (scale * 255)</param>
         /// <returns>the modified image img. data image is NOT modified</returns>
-        Image<Rgba32> ApplyFxaa(Image<Rgba32> img, Image<Rgba32> data, float strength)
+        [Obsolete("Does not work")]
+        Image<Rgba32> ApplyFxaa_Old(Image<Rgba32> img, Image<Rgba32> data, float strength)
         {
             const float FXAA_MIN = 1f / 128f;
             const float FXAA_MULTI = 1f / 8f;
