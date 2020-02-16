@@ -31,6 +31,24 @@ namespace Anime4k.Algorithm
         }
 
         /// <summary>
+        /// Create the scaler with the given version of Anime4K
+        /// </summary>
+        /// <param name="algorithm">the version of anime4k to use</param>
+        public Anime4KScaler(Anime4KAlgorithmVersion algorithm)
+        {
+            switch (algorithm)
+            {
+                case Anime4KAlgorithmVersion.v10RC2:
+                    anime4K = new Anime4K010RC2();
+                    break;
+                case Anime4KAlgorithmVersion.v09:
+                default:
+                    anime4K = new Anime4K09();
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Scale a image up and apply Anime4K to the upscaled image. 
         /// Automatically calculates strength factors based on scale.
         /// </summary>

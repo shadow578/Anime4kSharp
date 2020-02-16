@@ -1,297 +1,428 @@
 ﻿using Anime4k.Algorithm;
-using Anime4k.Util;
+using Anime4kCli.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.Primitives;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 
 namespace Anime4kCli
 {
+    /// <summary>
+    /// Command line Flags (new):
+    /// -help           -?                  show help page
+    /// 
+    /// ~~ File Processing ~~
+    /// -input (file)       -i (file)       input path for SINGLE file processing (only that file is processed; cannot be used with -bd or -bm)
+    /// -batchdir (dir)     -bd (dir)       input path for BATCH file processing (all files matching the batchmask (-bm), -bm is REQUIRED)
+    /// -batchmsk (string)  -bm (string)    input file name mask for BATCH file processing (eg. "*.png" to process all png files in dir, or "img_*.png" to process all pngs starting with "img_")
+    /// -output (file/dir)  -o (file/dir)   output path for SINGLE or BATCH file processing
+    ///                                     in SINGLE file mode, this is the path to the output file (WITH filename + extension); if not given, the input filename is suffixed with "_a4k"
+    ///                                     in BATCH file mode, this is the path to the output directory (filenames are NOT changed); if not given, the output dir is "/a4k/" inside the input dir (-bd)
+    /// -overwrite (bool)   -ow (bool)      if set, any output file that exist will be overwritten
+    /// 
+    /// ~~ Processing Basic Settings ~~
+    /// -scale (float)      -s (float)          by what factor is the resolution of the input image(s) scaled? Default is 2
+    /// -resolution (size)  -r (size)           what resolution the output image(s) should be scaled to? (if not given, -scale is used)
+    /// -version (ver)      -v (ver)            sets the anime4k version used, default is v09
+    /// -debug (bool)       -d (bool)           if enabled, the different phases are saved to disk 
+    /// 
+    /// ~~ Processing Advanced Settings ~~
+    /// -passes (int)       -p (int)            how many passes of anime4k are ran
+    /// -strenghtC (float)  -sc (float)         sets the color push strenght
+    /// -strenghtG (float)  -sg (float)         sets the gradient/line push strenght
+    /// </summary>
     public static class App
     {
         /// <summary>
-        /// Error codes that are returned by the application
+        /// Error code for when processing file(s) goes wrong
         /// </summary>
-        enum ErrorCode : int
+        enum ErrorCode
         {
-            NO_ERROR = 0,
-            NO_ARGUMENTS,
-            CANNOT_FIND_INPUT_FILE
+            /// <summary>
+            /// No Processing error occured
+            /// </summary>
+            NoError,
+
+            /// <summary>
+            /// The command line is invalid (bad combination of parameters OR missing parameters)
+            /// </summary>
+            InvalidCommandline,
+
+            /// <summary>
+            /// The input file could not be found
+            /// </summary>
+            InputNotFound,
+
+            /// <summary>
+            /// The output file that was tried to write to already exists (and overwrite is not allowed)
+            /// </summary>
+            OutputFileExists
         }
 
         /// <summary>
-        /// Anime4K version names selectable by using -version parameter
+        /// Main entry point of the application
         /// </summary>
-        enum Anime4KVersion
+        /// <param name="args">command line args</param>
+        public static void Main(string[] args)
         {
-            /// <summary>
-            /// Anime4K version 0.9
-            /// </summary>
-            v09,
+            //call MainWrapped which does all the processing, stop the total time it takes
+            Stopwatch processingWatch = new Stopwatch();
+            processingWatch.Start();
+            ErrorCode mainError = MainWrapped(args);
+            processingWatch.Stop();
 
-            /// <summary>
-            /// Anime4K version 1.0 RC2
-            /// </summary>
-            v10RC2
-        }
+            //output processing time
+            Console.WriteLine($"Anime4K finished in {processingWatch.ElapsedMilliseconds} ms!");
 
-        public static int Main(string[] args)
-        {
-            //run a4k
-            ErrorCode err = MainA4K(args);
-
-            //show help page on errors
-            if (err != ErrorCode.NO_ERROR)
+            //show help page with error code (if we have one)
+            if (mainError != ErrorCode.NoError)
             {
-                PrintHelp(Enum.GetName(typeof(ErrorCode), err));
+                ShowHelp(mainError.ToString());
             }
 
-            return (int)err;
+#if DEBUG
+            //exit after enter (in DEBUG builds
+            Console.WriteLine("Press <ENTER> to exit");
+            Console.ReadLine();
+#endif
         }
 
         /// <summary>
-        /// Anime4K Cli main function
+        /// Main entry point wrapped for errorcode
         /// </summary>
-        /// <param name="args">console arguments</param>
-        /// <returns>the return code</returns>
-        static ErrorCode MainA4K(string[] args)
+        /// <param name="args">command line args</param>
+        /// <returns>errorcode of the function</returns>
+        static ErrorCode MainWrapped(string[] args)
         {
-            //error when no args are given
-            if (args.Length <= 0)
+            //parse command line input
+            if (!CommandlineDictionary.TryParse(args, out CommandlineDictionary commandline, '-', '/'))
             {
-                return ErrorCode.NO_ARGUMENTS;
+                //command line parse failed
+                return ErrorCode.InvalidCommandline;
             }
 
-            //prepare variables (+ default values) that should be parsed from command line
-            string inputFile;
-            string outputFile;
-            float scaleFactor = 2f;
+            //check if called for help page
+            if (commandline.TryGetAny(out bool helpPageRequested, "help", "?") && helpPageRequested)
+            {
+                //show help and exit
+                ShowHelp();
+                return ErrorCode.NoError;
+            }
+
+            //process single file or batch, depending if -bd and -bm are set AND -i is NOT set
+            bool isSingle = !commandline.HasAnyKey("batchdir", "bd") && !commandline.HasAnyKey("batchmask", "bm") && commandline.HasAnyKey("input", "i");
+            bool isBatch = commandline.HasAnyKey("batchdir", "bd") && commandline.HasAnyKey("batchmask", "bm") && !commandline.HasAnyKey("input", "i");
+
+            //check if command line is valid
+            if (isSingle == isBatch)
+            {
+                //invalid command line
+                return ErrorCode.InvalidCommandline;
+            }
+
+            //process batch or single
+            if (isSingle)
+            {
+                return ProcessSingle(commandline);
+            }
+
+            if (isBatch)
+            {
+                return ProcessBatch(commandline);
+            }
+
+            //how did we end up here?? (this should NEVER happen, assume command line is invalid...)
+            return ErrorCode.InvalidCommandline;
+        }
+
+        /// <summary>
+        /// Process a single file with the given command line
+        /// </summary>
+        /// <param name="commandline">the command line to use</param>
+        /// <returns>errorcode of the processing step</returns>
+        static ErrorCode ProcessSingle(CommandlineDictionary commandline)
+        {
+            Console.WriteLine("Process SINGLE...");
+
+            //get input file path
+            if (!commandline.TryGetAny(out string inputFilePath, "input", "i")
+                || !File.Exists(inputFilePath))
+            {
+                //input file does NOT exist
+                return ErrorCode.InputNotFound;
+            }
+
+            //get the output path
+            if (!commandline.TryGetAny(out string outputFilePath, "output", "o"))
+            {
+                //default to input file path + _a4k
+                outputFilePath = Path.Combine(Path.GetDirectoryName(inputFilePath), $"{Path.GetFileNameWithoutExtension(inputFilePath)}_a4k{Path.GetExtension(inputFilePath)}");
+            }
+
+            //process the file
+            return ProcessFile(inputFilePath, outputFilePath, commandline);
+        }
+
+        /// <summary>
+        /// Process multiple files with the given command line
+        /// </summary>
+        /// <param name="commandline">the command line to use</param>
+        /// <returns>errorcode of the processing step</returns>
+        static ErrorCode ProcessBatch(CommandlineDictionary commandline)
+        {
+            Console.WriteLine("Process BATCH...");
+
+            //get batch input directory and filename mask
+            if (!commandline.TryGetAny(out string batchDir, "batchdir", "bd")
+                || !Directory.Exists(batchDir))
+            {
+                //batch directory not found!
+                return ErrorCode.InputNotFound;
+            }
+
+            if (!commandline.TryGetAny(out string batchMask, "batchmask", "bm"))
+            {
+                //batch mask not found
+                return ErrorCode.InvalidCommandline;
+            }
+
+            //get batch output directory
+            if (!commandline.TryGetAny(out string batchOutputDir, "output", "o"))
+            {
+                //no output directory given, default to batchdir/a4k/
+                batchOutputDir = Path.Combine(batchDir, "a4k");
+            }
+
+            //process each file in the batch directory that matches the mask
+            int fileCounter = 0;
+            ErrorCode errors = ErrorCode.NoError;
+            foreach (string sourceFile in Directory.EnumerateFiles(batchDir, batchMask, SearchOption.TopDirectoryOnly))
+            {
+                //get output filename
+                string targetFile = Path.Combine(batchOutputDir, Path.GetFileName(sourceFile));
+
+                //process the file
+                errors |= ProcessFile(sourceFile, targetFile, commandline);
+                fileCounter++;
+            }
+
+            Console.WriteLine($"Processed {fileCounter} files in {batchDir}!");
+            return errors;
+        }
+
+        /// <summary>
+        /// Process a single file based on the command line given
+        /// </summary>
+        /// <param name="sourcePath">the file to process</param>
+        /// <param name="targetPath">the path to save the processed image to (if the file exists AND -overwrite is NOT set, errorcode "OutputFileExists" will be returned)</param>
+        /// <param name="commandline">the commandline to use</param>
+        /// <returns>errorcode of the file processing action</returns>
+        static ErrorCode ProcessFile(string sourcePath, string targetPath, CommandlineDictionary commandline)
+        {
+            Console.WriteLine($"Processing \"{sourcePath}\", saving to \"{targetPath}\"...");
+
+            #region Prepare Input and Output file paths
+            //check input file exists
+            if (!File.Exists(sourcePath))
+            {
+                return ErrorCode.InputNotFound;
+            }
+
+            //prepare any directories needed for the output path
+            string targetDir = Path.GetDirectoryName(targetPath);
+            if (!Directory.Exists(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            //check output file can be written to (does not exist or am allowed to overwrite)
+            if (File.Exists(targetPath))
+            {
+                //delete the file if we are allowed to overwrite it
+                if (commandline.TryGetAny(out bool allowOverwrite, "overwrite", "o") && allowOverwrite)
+                {
+                    //have overwrite flag and is set to true, delete the file and be A-OK
+                    try
+                    {
+                        File.Delete(targetPath);
+                    }
+                    catch (Exception)
+                    {
+                        //delete failed, return error code
+                        return ErrorCode.OutputFileExists;
+                    }
+                }
+                else
+                {
+                    //are not allowed to overwrite, return error code
+                    return ErrorCode.OutputFileExists;
+                }
+            }
+            #endregion
+
+            //get scaler version to use
+            if (!commandline.TryGetAny(out Anime4KAlgorithmVersion scalerVersion, "version", "v"))
+            {
+                scalerVersion = Anime4KAlgorithmVersion.v09;
+            }
+
+            //create the scaler
+            Anime4KScaler scaler = new Anime4KScaler(scalerVersion);
+
+            #region Prepare scaler parameters
+            //check if we have a fixed output size given
             Size targetSize = Size.Empty;
-            float strengthColor = -1f;
-            float strengthGradient = -1f;
-            int passes = 1;
-            bool debug = false;
-            Anime4KVersion version = Anime4KVersion.v09;
+            bool hasTargetSize = commandline.TryGetAny(out string targetSizeStr, "resolution", "r") //can get value
+                                    && Util.TryParseSize(targetSizeStr, out targetSize); //can parse value
 
-            //parse the command line arguments
-            Dictionary<string, string> cArgs = ParseArgs(args, new char[] { '-', '/' });
+            //check if we have strenght values given
+            float strengthC = -1f, strengthG = -1f;
+            bool hasStrengthValues = commandline.TryGetAny(out strengthC, "strengthC", "sc")
+                                        && commandline.TryGetAny(out strengthG, "strengthG", "sg");
 
-            //check for help arg
-            if(cArgs.TryGetValue("help", "?", out string _))
+            //get number of passes to run
+            if (!commandline.TryGetAny(out int passes, "passes", "p"))
             {
-                PrintHelp("HELP_ARG_SUPPLIED");
+                //default to 1 pass
+                passes = 1;
             }
 
-            #region Parse Argument List
-
-            //get input path
-            if (!cArgs.TryGetValue("input", "i", out inputFile)
-                || string.IsNullOrWhiteSpace(inputFile) || !File.Exists(inputFile))
+            //get scale factor
+            if (!commandline.TryGetAny(out float scaleFactor, "scale", "s"))
             {
-                return ErrorCode.CANNOT_FIND_INPUT_FILE;
-            }
-
-
-            //get output path
-            if (!cArgs.TryGetValue("output", "o", out outputFile))
-            {
-                //default to inputFile + "_anime4k.png"
-                outputFile = Path.Combine(Path.GetDirectoryName(inputFile), Path.GetFileNameWithoutExtension(inputFile) + "_anime4k.png");
-            }
-
-            //get scale
-            if (cArgs.TryGetValue("scale", "s", out string scaleStr)
-                && !float.TryParse(scaleStr, out scaleFactor))
-            {
-                Console.WriteLine($"Failed to parse scale factor value from input string \"{scaleStr}\"! Defaulting to {scaleFactor}");
-            }
-
-            //get resolution
-            if (cArgs.TryGetValue("resolution", "r", out string resStr)
-                && !TryParseSize(resStr, out targetSize))
-            {
-                Console.WriteLine($"Failed to parse target resolution value from input string \"{resStr}\"!");
-            }
-
-            //get color strength
-            if (cArgs.TryGetValue("strenghtC", "sc", out string strenghtColStr)
-                && !float.TryParse(strenghtColStr, out strengthColor))
-            {
-                Console.WriteLine($"Failed to parse color push strength value from input string \"{strenghtColStr}\"!");
-            }
-
-            //get gradient strength
-            if (cArgs.TryGetValue("strenghtG", "sg", out string strenghtGradStr)
-                && !float.TryParse(strenghtGradStr, out strengthGradient))
-            {
-                Console.WriteLine($"Failed to parse gradient push strength value from input string \"{strenghtGradStr}\"!");
-            }
-
-            //get a4k laps count
-            if (cArgs.TryGetValue("passes", "p", out string passStr)
-                && !int.TryParse(passStr, out passes))
-            {
-                Console.WriteLine($"Failed to parse anime4k pass count value from input string \"{passStr}\"!");
+                //default to 2
+                scaleFactor = 2f;
             }
 
             //get debug flag
-            if (cArgs.TryGetValue("debug", "d", out string dbStr))
+            if (!commandline.TryGetAny(out bool debug, "debug", "d"))
             {
-                //default to true if no value given
-                if (string.IsNullOrWhiteSpace(dbStr)) dbStr = "true";
-
-                if (!bool.TryParse(dbStr, out debug))
-                {
-                    Console.WriteLine($"Failed to parse debug flag from input string \"{dbStr}\"!");
-                }
+                //default debug to false
+                debug = false;
             }
-
-            //get version
-            if (cArgs.TryGetValue("version", "v", out string verStr)
-                && !Enum.TryParse(verStr, true, out version))
-            {
-                Console.WriteLine($"Failed to parse anime4k version from input string \"{verStr}\"!");
-            }
-
             #endregion
 
-            //get mode flags
-            bool hasTargetSize = targetSize != Size.Empty;
-            bool hasStrengthValues = strengthColor >= 0 && strengthGradient >= 0;
-
-            //dump out input parameters
-            Console.WriteLine($@"
-Input Parameters DUMP:
---Files-----------------------------------------
-Input File Path:    ""{inputFile}""
-Output File Path:   ""{outputFile}""
-Save Sub- Phases:   {(debug ? "YES" : "NO")}
---Resolution--------------------------------------
-Scale Factor:       {scaleFactor}
-Target Resolution:  {targetSize.Width} x {targetSize.Height}
-Use Resolution:     {(hasTargetSize ? "YES" : "NO")}
---Anime4K-Config----------------------------------
-Anime4K Version:        {version}
+            //dump scaler parameters
+            Console.WriteLine($@"-----------------------------------------------
+Input File:  ""{sourcePath}""
+Output File: ""{targetPath}""
+Save Phases:            {(debug ? "YES" : "NO")}
+Scale Factor:           {scaleFactor}
+Target Resolution:      {targetSize.Width} x {targetSize.Height}
+Use Resolution:         {(hasTargetSize ? "YES" : "NO")}
+Anime4K Version:        {scalerVersion}
 Anime4K Passes:         {passes}
-Color Push Strength:    {(strengthColor == -1 ? "AUTO" : strengthColor.ToString())}
-Gradient Push Strength: {(strengthGradient == -1 ? "AUTO" : strengthGradient.ToString())}
+Color Push Strength:    {(strengthC == -1 ? "AUTO" : strengthC.ToString())}
+Gradient Push Strength: {(strengthG == -1 ? "AUTO" : strengthG.ToString())}
 Use User Strengths:     {(hasStrengthValues ? "YES" : "NO")}
-");
+-----------------------------------------------");
 
-            //load input file image
-            Console.WriteLine("Load Source Image...");
-            Image<Rgba32> inputImg = Image.Load<Rgba32>(inputFile);
-
-            #region Create Scaler
-            //create scaler
-            Anime4KScaler scaler;
-            switch (version)
+            #region load the image and scale it
+            Stopwatch fileProcessingWatch = new Stopwatch();
+            fileProcessingWatch.Start();
+            using (Image<Rgba32> inputImg = Image.Load<Rgba32>(sourcePath))
             {
-                case Anime4KVersion.v10RC2:
-                {
-                    //Create anime4k scaler version 1.0 RC2
-                    scaler = new Anime4KScaler(new Anime4K010RC2());
-                    break;
-                }
-                case Anime4KVersion.v09:
-                default:
-                {
-                    //Create anime4k scaler version 0.9 (default)
-                    scaler = new Anime4KScaler(new Anime4K09());
-                    break;
-                }
-            }
-            #endregion
+                //prepeare output image
+                Image<Rgba32> outputImg = null;
 
-            #region Run Anime4K
-            //apply scaling according to mode flags
-            Console.WriteLine("Run Anime4K based on mode flags...");
-            Image<Rgba32> outputImg;
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            if (hasTargetSize)
-            {
-                if (hasStrengthValues)
+                //do scaling
+                if (hasTargetSize)
                 {
-                    //target size + strength
-                    outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, strengthColor, strengthGradient, debug);
+                    if (hasStrengthValues)
+                    {
+                        //target size + strength
+                        outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, strengthC, strengthG, debug);
+                    }
+                    else
+                    {
+                        //target size no strength
+                        outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, debug);
+                    }
                 }
                 else
                 {
-                    //target size no strength
-                    outputImg = scaler.Scale(inputImg, targetSize.Width, targetSize.Height, passes, debug);
+                    if (hasStrengthValues)
+                    {
+                        //scale factor + strength
+                        outputImg = scaler.Scale(inputImg, scaleFactor, passes, strengthC, strengthG, debug);
+                    }
+                    else
+                    {
+                        //scale factor no strength
+                        outputImg = scaler.Scale(inputImg, scaleFactor, passes, debug);
+                    }
                 }
+
+                //save the output image and dispose it
+                outputImg?.Save(targetPath);
+                outputImg?.Dispose();
             }
-            else
-            {
-                if (hasStrengthValues)
-                {
-                    //scale factor + strength
-                    outputImg = scaler.Scale(inputImg, scaleFactor, passes, strengthColor, strengthGradient, debug);
-                }
-                else
-                {
-                    //scale factor no strength
-                    outputImg = scaler.Scale(inputImg, scaleFactor, passes, debug);
-                }
-            }
-            sw.Stop();
+            fileProcessingWatch.Stop();
             #endregion
 
-            //save output image
-            Console.WriteLine($"Anime4K Finished in {sw.ElapsedMilliseconds} ms ({sw.Elapsed.TotalSeconds.ToString("0.##")} s)");
-            Console.WriteLine("Saving output image...");
-            outputImg.Save(outputFile);
-
-            //exit without error
-            Console.WriteLine("Finished!");
-            return ErrorCode.NO_ERROR;
+            Console.WriteLine($"Finished processing \"{sourcePath}\" in {fileProcessingWatch.ElapsedMilliseconds} ms!");
+            return ErrorCode.NoError;
         }
 
         /// <summary>
-        /// Print the help page to console
+        /// show the help page to the user
         /// </summary>
-        /// <param name="cause">why the help page is printed</param>
-        static void PrintHelp(string cause = "")
+        /// <param name="errorText">the error why the help page is shown to the user</param>
+        static void ShowHelp(string errorText = null)
         {
             //create a list of available versions
             string verStr = "";
-            foreach (string ver in Enum.GetNames(typeof(Anime4KVersion)))
+            foreach (string ver in Enum.GetNames(typeof(Anime4KAlgorithmVersion)))
             {
                 verStr += ver;
                 verStr += ", ";
             }
 
-            //print page
+            //print help page
             Console.WriteLine($@"
 Anime4K CLI Help Page
-Shown to you because of error code: {cause}.
+Error Code: {(string.IsNullOrWhiteSpace(errorText) ? "NO ERROR" : errorText)}
 
 Console Arguments:
--input / -i       <file>    input file
--output / -o      <file>    output file                                         
-                            (optional, default: input + _anime4k.png)
--scale / -s       <float>   by how much the image should be upscaled            
-                            (optional, default: 2)
--resolution / -r  <size>    target resolution                                   
-                            (optional, overrides -f, example: 1920x1080)
--strenghtC / -sc  <float>   color push strength                                 
-                            (optional)
--strenghtG / -sg  <float>   gradient algorithm strength                         
-                            (optional)
--passes / -p      <int>     how often the algorithm is repeated                 
-                            (optional, default value: 1)
--debug / -d       <bool>    when set the different phases are saved to disk     
-                            (optional, default value: false)
--version /-v      <ver>     Anime4K version to use.
-                            (optional, default value: v09)
--help /-?                   Show this help page
+-help / -? (bool)               Show the help page
 
-Any Argument Value may be encapsulated in (double) quotes
-Flags (arguments of type bool) default to TRUE if no value is given
+~~ File Input / Output ~~
+-input / -i (file)              input path when processing a SINGLE file
+                                CANNOT be used in combination with -bd or -bm
+-batchdir / -bd (directory)     input directory when BATCH processing
+                                Any file in the directory matching the mask (-bm) is processed
+                                CANNOT be used in combination with -i
+                                MUST be used in combination with -bm
+-batchmask / -bm (mask)         input file name mask when BATCH processing
+                                eg. ""*.png"" to process all pngs
+                                CANNOT be used in combination with -i
+                                MUST be used in combination with -bd
+-output / -o (file/dir)         output path for SINGLE or BATCH processing mode
+                                in SINGLE mode the path to the output file, defaults to
+                                input filename + _a4k
+                                in BATCH mode the path of the output directory, defaults to
+                                ""/a4k/"" inside batch dir (-bd)
+-overwrite / -ow (bool)         Enables overwriting of existing output files
+
+~~ Processing Basic Settings ~~
+-scale / -s (float)             the factor by which the input image is scaled, defaults to 2
+-resolution / -r (size)         the resolution of output images (in format WxH (eg. 100x200))
+                                by default, the value of scale (-s) is used
+-version / -v (version)         sets the version of the Anime4K algorithm that is used.
+                                by default, v09 is used
+                                Available Versions: {verStr}
+-debug / -d (bool)              debug mode, if enabled sub- phases are saved to disk
+
+~~ Processing Advanced Settings ~~
+-strengthC / -sc  (float)   color push strength                                 
+-strengthG / -sg  (float)   gradient algorithm strength                         
+-passes / -p      (int)     how often the algorithm is repeated                 
+                            default value is 1
+                                
+Any Parameter Value may be encapsulated in single or double quotes
+Flags (Parameters of type bool) default to TRUE if no value is given
     so ""-d"" is the same as ""-d true""
 
 Available Anime4K versions are:
@@ -299,103 +430,6 @@ Available Anime4K versions are:
 
 Press <ENTER> to continue.");
             Console.ReadLine();
-        }
-
-        /// <summary>
-        /// parse a list of command line arguments into a key/value dictionary
-        /// </summary>
-        /// <param name="cmdArgs">the command line args</param>
-        /// <param name="paramNamePrefix">the prefixes that are valid for command line parameter names (e.g. "-" or "/")</param>
-        /// <returns>a dictionary of parameter names and values</returns>
-        static Dictionary<string, string> ParseArgs(string[] cmdArgs, char[] paramNamePrefix)
-        {
-            //create dictionary that later contains key/value pairs
-            Dictionary<string, string> args = new Dictionary<string, string>();
-
-            //enumerate each command line arg, also get the arguments that follows the current arg.
-            string arg, nextArg, paramValue;
-            for (int ap = 0; ap < cmdArgs.Length; ap++)
-            {
-                //get args in lowercase
-                arg = cmdArgs[ap].ToLower();
-                nextArg = ((ap + 1) < cmdArgs.Length) ? cmdArgs[ap + 1] : string.Empty;
-
-                //skip if arg is empty or not a parameter name
-                if (string.IsNullOrWhiteSpace(arg) || !arg.StartsWithAny(paramNamePrefix)) continue;
-
-                //check if next arg is a parameter name
-                if (!string.IsNullOrWhiteSpace(nextArg) && !nextArg.StartsWithAny(paramNamePrefix))
-                {
-                    //next arg is NOT a parameter name, so a value
-                    paramValue = nextArg;
-                }
-                else
-                {
-                    //next arg is empty or a parameter name, set value to string.Empty
-                    paramValue = string.Empty;
-                }
-
-                //set key/value
-                arg = arg.TrimStart(paramNamePrefix);
-                if (!args.ContainsKey(arg))
-                {
-                    args.Add(arg, paramValue.Trim('"'));
-                }
-            }
-
-            return args;
-        }
-
-        /// <summary>
-        /// Get a value from the dictiionary
-        /// </summary>
-        /// <param name="dic">the dictionary</param>
-        /// <param name="key">the primary key</param>
-        /// <param name="altKey">the alternative key if primary key is not found</param>
-        /// <param name="value">the value that was found</param>
-        /// <returns>was the key/altKey found?</returns>
-        static bool TryGetValue(this Dictionary<string, string> dic, string key, string altKey, out string value)
-        {
-            //try primary key
-            if (dic.TryGetValue(key, out value))
-            {
-                return true;
-            }
-
-            //try alt key
-            return dic.TryGetValue(altKey, out value);
-        }
-
-        /// <summary>
-        /// Parse a Size from a string in format WxH
-        /// </summary>
-        /// <param name="str">the string to parse</param>
-        /// <param name="size">the parsed size, or Size.Empty if parse failed</param>
-        /// <returns>was the size parsed ok?</returns>
-        public static bool TryParseSize(string str, out Size size)
-        {
-            //dummy size
-            size = Size.Empty;
-
-            //check input is ok
-            if (string.IsNullOrWhiteSpace(str)) return false;
-
-            //split on x
-            string[] split = str.ToLower().Split('x');
-
-            //check there are 2 parts after split
-            if (split.Length != 2) return false;
-
-            //try to parse size components
-            if (!int.TryParse(split[0], out int width)
-                || !int.TryParse(split[1], out int heigth))
-            {
-                return false;
-            }
-
-            //return parsed size
-            size = new Size(width, heigth);
-            return true;
         }
     }
 }
