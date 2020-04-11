@@ -55,6 +55,9 @@ You can see the end result in my Video Player App [YAVP](https://github.com/shad
 * [keijiro/UnityAnime4K](https://github.com/keijiro/UnityAnime4K)
 * [andraantariksa/Anime4K-rs](https://github.com/andraantariksa/Anime4K-rs)
 * [k4yt3x/video2x](https://github.com/k4yt3x/video2x)
+* [TianZerL/Anime4KPython](https://github.com/TianZerL/Anime4KPython)
+* [TianZerL/Anime4KCPP](https://github.com/TianZerL/Anime4KCPP)
+* [TianZerL/Anime4KGo](https://github.com/TianZerL/Anime4KGo)
 * [net2cn/Anime4KSharp](https://github.com/net2cn/Anime4KSharp)*
 
 _*This is another Implementation of Anime4K 0.9 in C#, however, net2cn uses C#'s builtin Bitmap class. Still, both mine and net2cn's implementation share many similarities since they are based on the same algorithm._
