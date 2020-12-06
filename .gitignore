@@ -17,6 +17,8 @@ ASSETS/DEV/
 *.userosscache
 *.sln.docstates
 
+a4k/
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
